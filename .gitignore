@@ -15,3 +15,6 @@ TestResults/
 # NuGet
 packages/
 *.nupkg
+
+# Maintainer notes, never published
+/internal/
