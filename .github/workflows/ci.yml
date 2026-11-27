@@ -1,54 +1,380 @@
+# CI for the C#/.NET build. Template: engineering-standard.md, section 3.1 (ci-dotnet.yml).
+#
+# Windows only. Every job that builds, tests or packages runs on windows-2025; the aggregate
+# gate runs only jq over `needs` and takes ubuntu-24.04. No job carries step-security/harden-runner
+# on Windows: its free tier allows audit mode only there, and audit mode uploads the job's events.
+#
+# The product name is not spelled here. The product action reads `ProductName` from
+# Directory.Build.props and exports PRODUCT, SOLUTION, CORE_PROJECT, PUBLISH_PROJECT, TEST_PROJECT,
+# FUZZ_PROJECT and FUZZ_TARGET_DLLS.
+#
+# Assumes: global.json pins the SDK and sets the Microsoft.Testing.Platform runner;
+# Directory.Build.props sets TreatWarningsAsErrors, RestorePackagesWithLockFile, the NuGet audit
+# properties and the publish-shape guard; the test project references
+# Microsoft.Testing.Extensions.TrxReport; .github/licence-policy.json version 2 exists.
+#
+# The ruleset requires one check from this file: "CI gate" (the last job).
+
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_call: # nightly.yml runs the whole CI again
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
+# Superseded pull-request runs are cancelled; pushes to main and the nightly's call
+# are not, and never share a group with each other.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  # no PowerShell telemetry (PG-D14): the `shell: pwsh` steps below run pwsh 7, which sends it unless
+  # this is set (PowerShell Telemetry.cs: "true, yes, or 1")
+  POWERSHELL_TELEMETRY_OPTOUT: "1"
+
+# Git Bash on the Windows runner, so the scripts read the same as on any system; a step
+# that needs PowerShell says `shell: pwsh`.
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  build:
-    name: Format, test, build and installer
-    runs-on: windows-latest
-    timeout-minutes: 30
+  lint:
+    name: Format and analyzers
+    runs-on: windows-2025
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
-
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      - run: dotnet restore "$SOLUTION" --locked-mode
       - name: Check formatting
-        run: dotnet format Raikasa.slnx --verify-no-changes
+        run: dotnet format "$SOLUTION" --verify-no-changes --no-restore
 
       # The previous name may appear only where .github/scripts/old-name-allow-list.txt allows it.
       - name: Check for the previous name
         run: node .github/scripts/check-old-name.mjs
 
-      - name: Install Inno Setup
-        run: choco install innosetup --yes --no-progress
+  test:
+    name: Build and test
+    runs-on: windows-2025
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      - run: dotnet restore "$SOLUTION" --locked-mode
+      - run: dotnet build "$SOLUTION" -c Release --no-restore
+      - run: dotnet test --solution "$SOLUTION" -c Release --no-build --report-trx --results-directory TestResults
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: test-results
+          path: TestResults/
+          retention-days: 14
 
-      # Tests, self-contained publish, third-party licenses and the installer.
+  scripts:
+    # The PowerShell scripts embedded in the app (src/Refreshify.Core/Scripts) are linted with
+    # PSScriptAnalyzer and tested with Pester 5. -MinimumVersion keeps out the Pester 3.4.0 that
+    # ships with Windows. The windows-2025 image's toolset lists Pester 5.9.0 and PSScriptAnalyzer.
+    name: Embedded scripts (Pester, PSScriptAnalyzer)
+    runs-on: windows-2025
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $found = @(Invoke-ScriptAnalyzer -Path "src/$env:PRODUCT.Core/Scripts" -Recurse -Settings tests/Scripts/PSScriptAnalyzerSettings.psd1)
+          $found | Format-Table -AutoSize | Out-String -Width 200
+          if ($found.Count) { throw "PSScriptAnalyzer: $($found.Count) findings" }
+      - name: Pester
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.0.0
+          $config = New-PesterConfiguration
+          $config.Run.Path = 'tests/Scripts'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config
+
+  audit:
+    name: Vulnerable packages
+    runs-on: windows-2025
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      # NuGet audit at restore (NU1900-NU1905 are errors through Directory.Build.props
+      # when AuditPipeline=true), then the full transitive list as a second opinion.
+      - run: dotnet restore "$SOLUTION" --locked-mode -p:AuditPipeline=true
+      - name: dotnet package list --vulnerable
+        run: |
+          dotnet package list --project "$SOLUTION" --no-restore --vulnerable --include-transitive --format json > vulnerable.json
+          cat vulnerable.json
+          if grep -q '"vulnerabilities"' vulnerable.json; then
+            echo "::error::a package with a known vulnerability is in the graph"; exit 1
+          fi
+
+  licences:
+    # Dependency review covers only a public pull request's diff; this gate covers the whole
+    # tree. The one policy file, .github/licence-policy.json version 2, is the only place a
+    # licence is allowed; the tool configurations are generated from it and never edited by
+    # hand, and no person accepts a dependency.
+    name: Dependency licences and notices
+    runs-on: windows-2025
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      # The generated files (.github/dependency-review-config.yml and .github/nuget-license/)
+      # must be exactly what the policy gives today.
+      - name: Generated licence configurations are current
+        run: node .github/scripts/licence-configs.mjs --check
+      - run: dotnet restore "$SOLUTION" --locked-mode
+      # nuget-license 4.0.18. Its exit code is undocumented, so check-licences.mjs judges the
+      # JSON report. The allow list, the package overrides and the licence-file mappings are
+      # the generated files in .github/nuget-license/. The mappings file is always {}: a
+      # clarification of a `type="file"` licence pins the hash of the file installed under
+      # ~/.nuget/packages/, which check-licences.mjs reads, never a committed copy.
+      - run: dotnet tool install nuget-license --version 4.0.18 --tool-path .tools
+      # `|| true`: nuget-license exits 1 when it meets a licence it does not allow, and under
+      # bash -e that would end the step before check-licences.mjs names the package.
+      # check-licences.mjs exits 2 on a missing, unreadable or empty report, and fails on
+      # every denied licence in it.
+      - name: Licences against .github/licence-policy.json
+        run: |
+          .tools/nuget-license -i "$SOLUTION" -t -o Json -fo licences.json \
+            -a .github/nuget-license/allowed-licenses.json \
+            --override-package-information .github/nuget-license/overrides.json \
+            --licensefile-to-license-mappings .github/nuget-license/licensefile-mappings.json || true
+          node .github/scripts/check-licences.mjs --format nuget-license --report licences.json
+      # The platform entries of the policy: Inno Setup's and Pascal Script's licence texts,
+      # each pinned by SHA-256 (check-licences.mjs --format platform).
+      - name: Platform records
+        run: node .github/scripts/check-licences.mjs --format platform
+      # The committed notices must be exactly what the generator writes today. The report is
+      # taken on the shipped project only.
+      - name: THIRD-PARTY-NOTICES.md is current
+        run: |
+          .tools/nuget-license -i "$PUBLISH_PROJECT" -t -o Json -fo notices/nuget-license.json \
+            -a .github/nuget-license/allowed-licenses.json \
+            --override-package-information .github/nuget-license/overrides.json \
+            --licensefile-to-license-mappings .github/nuget-license/licensefile-mappings.json
+          node .github/scripts/generate-notices.mjs --write --app-name "$PRODUCT" --nuget-license notices/nuget-license.json --nuget-packages "$USERPROFILE/.nuget/packages"
+          git diff --exit-code -- ':(glob)THIRD-PARTY-NOTICES*.md'
+
+  mutation:
+    name: Mutation testing (changed code)
+    if: github.event_name == 'pull_request'
+    runs-on: windows-2025
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      - run: dotnet tool install dotnet-stryker --version 5.0.0 --tool-path .tools
+      # The files this pull request changed (Stryker.NET's --since), and at least 80% of their
+      # mutants must be killed. Stryker.NET requires break <= low <= high, so all three are
+      # given. The whole project runs nightly against the ratchet.
+      # --test-runner mtp: the default runner is VSTest, which cannot run an xUnit v3 project
+      # on Microsoft.Testing.Platform. --test-project: without it Stryker.NET takes the whole
+      # repository as the test project, so any changed file (CHANGELOG.md included) tests every
+      # mutant, and a pull request that changes no mutable code never gets "nothing to mutate".
+      - env:
+          BASE_REF: ${{ github.base_ref }}
+        run: >
+          .tools/dotnet-stryker --project "$(basename "$CORE_PROJECT")"
+          --solution "$SOLUTION"
+          --test-runner mtp
+          --test-project "$TEST_PROJECT"
+          --since:"origin/$BASE_REF"
+          --threshold-high 100 --threshold-low 80 --break-at 80
+          --reporter html --reporter json --reporter progress
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: mutation-report
+          path: StrykerOutput/
+          retention-days: 14
+
+  red-green:
+    name: Red-green proof
+    if: github.event_name == 'pull_request'
+    runs-on: windows-2025
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      # The whole suite runs, so --cases dotnet counts only the test classes of the changed
+      # files (a test class is named after its file).
+      - name: Prove the new tests fail on base and pass on head
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          subjects="$(git log --format=%s "$BASE..$HEAD"; printf '%s\n' "$TITLE")"
+          if grep -qE '^fix(\([^)]*\))?!?:' <<<"$subjects"; then kind=fix
+          elif grep -qE '^feat(\([^)]*\))?!?:' <<<"$subjects"; then kind=feat
+          else kind=other; fi
+          node .github/scripts/red-green.mjs --base "$BASE" --head "$HEAD" --kind "$kind" \
+            --tests tests/ \
+            --cmd "dotnet test --solution $SOLUTION -c Release --report-trx --results-directory TestResults" \
+            --report TestResults --format trx --cases dotnet
+
+  fuzz-build:
+    # The parsers of text that another party controls (the output of DISM, SFC, winget and the
+    # Windows Update script, the release JSON, the checksum sidecar and the release tag) have
+    # SharpFuzz targets. Here each target is built, instrumented and run once over its
+    # committed corpus (libFuzzer's -runs=0); nightly.yml fuzzes each for ten minutes.
+    name: Fuzz targets build and replay
+    runs-on: windows-2025
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      - run: dotnet tool install SharpFuzz.CommandLine --version 2.3.0 --tool-path .tools
+      - name: Install libfuzzer-dotnet
+        env:
+          VERSION: "v2025.05.02.0904"
+          ASSET: "libfuzzer-dotnet-windows.exe"
+          # The release publishes no checksum; this is the SHA-256 of the Windows asset as
+          # downloaded when the job was written.
+          SHA256: "17af5b3f6ff4d2c57b44b9a35c13051b570eb66f0557d00015df3832709050bf"
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/libfuzzer-dotnet.exe" \
+            "https://github.com/Metalnem/libfuzzer-dotnet/releases/download/${VERSION}/${ASSET}"
+          echo "${SHA256}  $RUNNER_TEMP/libfuzzer-dotnet.exe" | sha256sum --check --strict
+      - run: dotnet restore "$FUZZ_PROJECT" --locked-mode
+      - run: dotnet publish "$FUZZ_PROJECT" -c Release --no-restore -o fuzz-out
+      - name: Instrument the libraries under test
+        run: for dll in $FUZZ_TARGET_DLLS; do .tools/sharpfuzz "fuzz-out/$dll"; done
+      - name: Replay the committed corpus
+        run: bash fuzz/run.sh replay "$RUNNER_TEMP/libfuzzer-dotnet.exe" "fuzz-out/$(basename "$FUZZ_PROJECT" .csproj).dll"
+
+  package:
+    name: Package and install smoke
+    needs: [test]
+    runs-on: windows-2025
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      RestoreLockedMode: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      # Inno Setup comes from the vendor's own release, pinned by URL and SHA-256, never from
+      # Chocolatey, winget or another package manager. /CURRENTUSER installs without elevation;
+      # a moved or replaced file fails here.
+      - name: Install Inno Setup 7.1.1 (vendor release, pinned by URL and SHA-256)
+        shell: pwsh
+        env:
+          URL: https://github.com/jrsoftware/issrc/releases/download/is-7_1_1/innosetup-7.1.1-x64.exe
+          SHA256: 8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.1-x64.exe'
+          Invoke-WebRequest -Uri $env:URL -OutFile $exe
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash.ToLowerInvariant()
+          if ($actual -ne $env:SHA256) { Write-Error "innosetup-7.1.1-x64.exe has SHA-256 $actual, expected $env:SHA256"; exit 1 }
+          $dir = Join-Path $env:RUNNER_TEMP 'inno-setup-7'
+          $p = Start-Process -FilePath $exe -Wait -PassThru -ArgumentList @(
+            '/CURRENTUSER', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$dir`"")
+          if ($p.ExitCode -ne 0) { Write-Error "the Inno Setup installer exited with $($p.ExitCode)"; exit 1 }
+          $iscc = Join-Path $dir 'ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc)) { Write-Error "ISCC.exe is not in $dir"; exit 1 }
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      # Tests, self-contained publish, third-party licences and the installer. build.ps1 calls
+      # the compiler through $env:ISCC, which the step above sets.
       - name: Build
-        run: .\build.ps1
-
+        shell: pwsh
+        run: ./build.ps1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: installer
+          name: package
           path: artifacts/installer/*.exe
           if-no-files-found: error
-
+          retention-days: 7
       - name: Install and uninstall silently
+        shell: pwsh
         run: |
           $setup = (Get-ChildItem artifacts\installer\*.exe).FullName
-          $name = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.ProductName
+          $name = $env:PRODUCT
           $app = "$env:ProgramFiles\$name"
           $install = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
           if ($install.ExitCode) { throw "Setup failed with exit code $($install.ExitCode)." }
@@ -70,3 +396,75 @@ jobs:
           if (Test-Path "HKCU:\Software\$name") { throw 'The uninstaller left the settings behind.' }
           if (Test-Path "$env:LOCALAPPDATA\$name") { throw 'The uninstaller left the history behind.' }
           Write-Host 'Uninstalled cleanly.'
+
+  standard-user:
+    # GitHub's Windows runners run every job "as administrators with User Account Control (UAC)
+    # disabled", so everything that must hold for an unelevated user runs here as a fresh
+    # standard account, through .github/actions/standard-user, which also checks the token from
+    # inside. windows-2025 is Windows Server 2025, not Windows 11: a release that rests on
+    # shell, taskbar or Explorer results from it is confirmed on Windows 11 by hand.
+    name: Standard-user tests
+    runs-on: windows-2025
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The action's own tests first, so a broken check fails the job before anything is built:
+      # its Pester suite, then PSScriptAnalyzer over the action.
+      - name: Standard-user action tests
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.0.0
+          $config = New-PesterConfiguration
+          $config.Run.Path = '.github/actions/standard-user/tests/StandardUser.Tests.ps1'
+          $config.Run.Exit = $true
+          Invoke-Pester -Configuration $config
+          $found = @(Invoke-ScriptAnalyzer -Path .github/actions/standard-user -Recurse -Severity Error, Warning)
+          $found | Format-Table -AutoSize | Out-String -Width 200
+          if ($found.Count) { throw "PSScriptAnalyzer: $($found.Count) errors or warnings" }
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      # A Microsoft.Testing.Platform test project is an executable that needs no SDK or NuGet
+      # cache, so it is published into the workspace, where the account can read it.
+      - name: Publish the test executable
+        shell: pwsh
+        run: dotnet publish $env:TEST_PROJECT -c Release -o artifacts/standard-user
+      - uses: ./.github/actions/standard-user # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+        with:
+          token: desktop
+          script: tests/standard-user.ps1
+
+  gate:
+    # The one check the ruleset requires from this workflow. GitHub reports a job skipped by its
+    # own `if:` as a success, and a job skipped because a job it needs failed may not block
+    # merging, so the ruleset never points at the gates themselves. This job always runs and
+    # fails unless every gate succeeded, or was skipped by design on this event (MAY_SKIP: the
+    # pull-request-only jobs, on a push or the nightly call). It runs only jq over `needs`, so
+    # it takes the cheaper Linux runner and carries no harden-runner step, because it reaches no
+    # network.
+    name: CI gate
+    if: ${{ always() }}
+    needs: [lint, test, scripts, audit, licences, mutation, red-green, fuzz-build, package, standard-user]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every gate passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          MAY_SKIP: ${{ github.event_name != 'pull_request' && 'mutation red-green' || '' }}
+        run: |
+          bad="$(jq -r --arg may "$MAY_SKIP" '
+            ($may | split(" ") | map(select(length > 0))) as $ok
+            | to_entries[]
+            | select(.value.result != "success")
+            | select(.value.result != "skipped" or (.key as $k | $ok | index($k) | not))
+            | "\(.key)=\(.value.result)"' <<<"$RESULTS")"
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+          if [ -n "$bad" ]; then echo "::error::not green: $(paste -sd ' ' - <<<"$bad")"; exit 1; fi
+          echo "Every gate passed."

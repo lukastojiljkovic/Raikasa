@@ -1,18 +1,108 @@
-version: 2
-updates:
-  - package-ecosystem: nuget
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      nuget:
-        patterns: ['*']
-        update-types: [minor, patch]
+# Dependabot version updates. Template: engineering-standard.md, section 4.4.
+#
+# Security updates are a repository setting (Settings > Advanced Security > Dependabot security
+# updates) and open their own pull requests at once: the cooldown below does not delay them
+# (https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference).
+#
+# Program decisions, not measured norms:
+#   - cooldown: a new release waits 5 days (14 for a major) before a version-update pull request,
+#     so a compromised release that is pulled within days never reaches the tree through
+#     Dependabot. The options reference lists `semver-major-days` as not supported for
+#     github-actions, so that block has `default-days` only, and the reviewer holds a new major of
+#     an action the same way;
+#   - commit messages are Conventional Commits, so check-commits.mjs accepts them:
+#     "build(deps): ...", "build(deps-dev): ..." and "ci(deps): ...".
 
+version: 2
+
+updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: ci
+      include: scope
     groups:
+      # Every github/codeql-action/* step must run the same version, or the analysis fails.
+      codeql-action:
+        patterns: ["github/codeql-action/*"]
       actions:
-        patterns: ['*']
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 5
+      semver-major-days: 14
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      nuget-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+      nuget-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    # The Windows App SDK and WinUI packages move together, and a minor or a major of them changes
+    # the self-contained runtime that the installer carries: this release line takes their patch
+    # updates only. A security advisory that only a newer minor fixes is a decision for the
+    # repository, not a bump.
+    ignore:
+      - dependency-name: "Microsoft.WindowsAppSDK.*"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+
+  # global.json's SDK version.
+  - package-ecosystem: dotnet-sdk
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 5
+      semver-major-days: 14
+    commit-message:
+      prefix: build
+      include: scope
+
+  # The CI tools: the locked Semgrep tree in .github/ci-tools/ and markdownlint-cli2 in
+  # .github/docs-tools/. "ci(deps)" because they run only in CI.
+  - package-ecosystem: uv
+    directory: /.github/ci-tools
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 5
+      semver-major-days: 14
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      ci-tools:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /.github/docs-tools
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 5
+      semver-major-days: 14
+    commit-message:
+      prefix: ci
+      prefix-development: ci
+      include: scope
+    groups:
+      docs-tools:
+        patterns: ["*"]

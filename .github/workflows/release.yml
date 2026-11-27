@@ -1,53 +1,258 @@
+# Release from a version tag: build the installer, attest it, and publish the release once every
+# check has passed. Template: engineering-standard.md, section 6, with the checksum signing of the
+# Rust releases left out (it starts with 3.0.0).
+#
+# Nothing here is code signing. No binary gets an Authenticode signature, and nothing is submitted
+# to winget, a store or any channel but GitHub Releases. What proves the download: the `.sha256`
+# sidecar that the installed updater reads (exactly the installer's name plus `.sha256`), the
+# build-provenance attestation and the SBOM.
+#
+# Order of trust:
+#   1. the tag must match the version in Directory.Build.props, sit on main, have a dated
+#      CHANGELOG section, and its commit must have passed the CI gate;
+#   2. windows-2025 builds the installer from the tagged commit with a read-only token: the
+#      tests, the self-contained publish, the licences and the installer, with Inno Setup 7.1.1
+#      downloaded from the vendor and checked by URL and SHA-256. A gate fails the build unless the
+#      runtime it bundles is the newest patch of its channel;
+#   3. the publish job runs in the `release` environment (deployment rule: v* tags only; the
+#      maintainer's Approve click starts it, after his written approval and tag). It re-checks the
+#      installer against its sidecar, attests build provenance and the SBOM, creates a DRAFT release
+#      with every asset, re-checks the draft, and only then publishes it.
+#
+# The product name is not spelled here: the product action reads it from Directory.Build.props.
+#
+# harden-runner: the Linux jobs verify-tag and sbom start with it on public repositories, in block
+# mode with telemetry off and a per-job endpoint list (a first set, inference; the first run's log
+# names any endpoint a job still needs). Left out of build, which runs on Windows, where the action's
+# free tier allows audit mode only, and of publish, which attests and publishes what goes live with
+# first-party actions only. The SHA pins, zizmor and gitleaks keep those jobs' supply-chain checks.
+
 name: Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ["v*"]
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # no GitHub CLI telemetry (PG-D14): gh sends sampled telemetry by default since 2026-04
+  GH_TELEMETRY: "0"
+  # no PowerShell telemetry (PG-D14): the build job runs `shell: pwsh` steps on windows-2025
+  POWERSHELL_TELEMETRY_OPTOUT: "1"
+  # no .NET CLI telemetry (PG-D14)
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
 
 jobs:
-  release:
-    name: Build and publish the release
-    runs-on: windows-latest
-    timeout-minutes: 30
+  verify-tag:
+    name: Tag, version and changelog agree
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
+      contents: read
+      checks: read # the CI gate's result on the tagged commit
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }}
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout (full history); the check-run query of the CI gate (inference)
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # A tag on a commit whose CI is red, still running or never ran does not ship. On main every
+      # commit arrived through a pull request whose gates passed, and the push to main runs the CI
+      # again; that run's aggregate is what counts.
+      - name: The tagged commit passed the CI gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          result="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=CI%20gate" --jq '[.check_runs[].conclusion] | if length == 0 then "missing" elif all(. == "success") then "success" else map(tostring) | join(",") end')"
+          [ "$result" = "success" ] || { echo "::error::CI gate on $GITHUB_SHA is $result; release the commit only after its CI is green"; exit 1; }
+      - id: v
+        run: |
+          version="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' Directory.Build.props | head -n 1)"
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME does not match version $version in Directory.Build.props"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::the tagged commit is not on main"; exit 1; }
+          grep -qE "^## \[$(printf '%s' "$version" | sed 's/\./\\./g')\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md \
+            || { echo "::error::CHANGELOG.md has no dated section for $version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build the installer
+    needs: [verify-tag]
+    runs-on: windows-2025
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      RestoreLockedMode: "true"
+    outputs:
+      tests: ${{ steps.tests.outputs.tests }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
-
-      - name: Check that the tag matches the version
-        id: version
-        run: |
-          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
-          if ("v$version" -cne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME doesn't match version $version in Directory.Build.props." }
-          "version=$version" >> $env:GITHUB_OUTPUT
-          "name=$(([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.ProductName)" >> $env:GITHUB_OUTPUT
-
-      - name: Install Inno Setup
-        run: choco install innosetup --yes --no-progress
-
-      - name: Build
-        run: .\build.ps1 | Tee-Object build.log
-
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+      # No Actions cache in a job whose output ships: setup-node's package-manager-cache defaults to true.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          subject-path: artifacts/installer/*.exe
-
-      - name: Write the release notes
+          node-version: 24
+          package-manager-cache: false
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      # Inno Setup comes from the vendor's own release, pinned by URL and SHA-256, never from
+      # Chocolatey, winget or another package manager, as in ci.yml's package job. A moved or
+      # replaced file fails here.
+      - name: Install Inno Setup 7.1.1 (vendor release, pinned by URL and SHA-256)
+        shell: pwsh
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          URL: https://github.com/jrsoftware/issrc/releases/download/is-7_1_1/innosetup-7.1.1-x64.exe
+          SHA256: 8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.1-x64.exe'
+          Invoke-WebRequest -Uri $env:URL -OutFile $exe
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash.ToLowerInvariant()
+          if ($actual -ne $env:SHA256) { Write-Error "innosetup-7.1.1-x64.exe has SHA-256 $actual, expected $env:SHA256"; exit 1 }
+          $dir = Join-Path $env:RUNNER_TEMP 'inno-setup-7'
+          $p = Start-Process -FilePath $exe -Wait -PassThru -ArgumentList @(
+            '/CURRENTUSER', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$dir`"")
+          if ($p.ExitCode -ne 0) { Write-Error "the Inno Setup installer exited with $($p.ExitCode)"; exit 1 }
+          $iscc = Join-Path $dir 'ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc)) { Write-Error "ISCC.exe is not in $dir"; exit 1 }
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      # Tests, self-contained publish, third-party licences and the installer. build.ps1 calls the
+      # compiler through $env:ISCC, which the step above sets.
+      - name: Build
+        shell: pwsh
+        run: ./build.ps1 | Tee-Object build.log
+      - id: tests
+        shell: pwsh
+        run: |
+          $tests = [regex]::Match((Get-Content build.log -Raw), 'total:\s*(\d+)\s+failed:\s*0\b').Groups[1].Value
+          if (-not $tests) { throw 'The build log has no passing test summary.' }
+          "tests=$tests" >> $env:GITHUB_OUTPUT
+      # The runtime in the publish folder is the newest patch of its channel (Microsoft's release
+      # metadata), so a security update of the runtime is never shipped stale.
+      - name: The bundled runtime is the newest patch
+        shell: bash
+        run: node .github/scripts/check-runtime-patch.mjs --deps "artifacts/publish/win-x64/$PRODUCT.deps.json"
+      # The sidecar the installed updaters read: "<SHA-256>  <installer name>", exactly the installer's
+      # name plus .sha256.
+      - name: Write the checksum file
+        shell: pwsh
         run: |
           $setup = Get-Item artifacts\installer\*.exe
-          $tests = [regex]::Match((Get-Content build.log -Raw), 'total:\s*(\d+)\s+failed:\s*0\b').Groups[1].Value
-          if (-not $tests) { throw "The build log has no passing test summary." }
+          Set-Content "$($setup.FullName).sha256" -Encoding ascii -NoNewline -Value "$((Get-FileHash $setup -Algorithm SHA256).Hash)  $($setup.Name)"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-windows-2025
+          path: |
+            artifacts/installer/*.exe
+            artifacts/installer/*.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  sbom:
+    name: Software bill of materials
+    needs: [verify-tag]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }}
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; install-action's Syft download; the artifact upload (inference)
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Syft reads every lock file in the tree, packages.lock.json included. Syft 1.54.0 comes from
+      # install-action's checksummed manifest (its pinned SHA lists 1.54.0 with a SHA-256 per target).
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: syft@1.54.0
+      - name: Scan the tree
+        env:
+          # no Syft update check (PG-D14): on start Syft asks toolbox-data.anchore.io for a newer
+          # version unless told not to
+          SYFT_CHECK_FOR_APP_UPDATE: "false"
+        run: syft scan dir:. -o cyclonedx-json=sbom.cdx.json
+      - run: test "$(jq '.components | length' sbom.cdx.json)" -gt 0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom.cdx.json
+          retention-days: 7
+
+  publish:
+    name: Attest and publish
+    needs: [verify-tag, build, sbom]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release # v* tags only; the maintainer's Approve click
+    permissions:
+      contents: write # create and publish the release
+      id-token: write # sign the attestations
+      attestations: write
+    steps:
+      # No harden-runner: this job attests and publishes what goes live, with first-party actions only.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+      # The sidecar holds an upper-case hash (Get-FileHash); sha256sum reads lower case.
+      - name: The installer matches its sidecar
+        run: awk '{ print tolower($1) "  " $2 }' dist/*.sha256 | (cd dist && sha256sum --check --strict -)
+      # Attestations need a public repository on GitHub Free, Pro or Team
+      # (https://github.com/github/docs/blob/main/data/reusables/gated-features/attestations.md).
+      - if: ${{ !github.event.repository.private }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*.exe
+      - if: ${{ !github.event.repository.private }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*.exe
+          sbom-path: sbom.cdx.json
+      - name: Write the release notes
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.verify-tag.outputs.version }}
+          TESTS: ${{ needs.build.outputs.tests }}
+        run: |
+          $setup = Get-Item dist/*.exe
           $changes = [regex]::Match((Get-Content CHANGELOG.md -Raw -Encoding utf8), "(?ms)^## \[$([regex]::Escape($env:VERSION))\][^\n]*\n(.*?)(?=^## \[|^\[[^\]]+\]:|\z)").Groups[1].Value.Trim()
           if (-not $changes) { throw "CHANGELOG.md has no section for $env:VERSION." }
           # Release notes keep line breaks, so join the wrapped lines of each list item.
@@ -55,28 +260,41 @@ jobs:
           $values = @{
             FILE = $setup.Name
             SHA256 = (Get-FileHash $setup -Algorithm SHA256).Hash
-            TESTS = $tests
+            TESTS = $env:TESTS
             CHANGES = $changes
             TAG = $env:GITHUB_REF_NAME
             SERVER = $env:GITHUB_SERVER_URL
             REPOSITORY = $env:GITHUB_REPOSITORY
             RUN_URL = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
           }
-          $notes = Get-Content .github\release-notes.md -Raw -Encoding utf8
+          $notes = Get-Content .github/release-notes.md -Raw -Encoding utf8
           foreach ($key in $values.Keys) { $notes = $notes.Replace("{{$key}}", $values[$key]) }
           Set-Content release-notes.md $notes -Encoding utf8
           Get-Content release-notes.md
-
-      - name: Write the checksum file
-        run: |
-          $setup = Get-Item artifacts\installer\*.exe
-          Set-Content "$($setup.FullName).sha256" -Encoding ascii -NoNewline -Value "$((Get-FileHash $setup -Algorithm SHA256).Hash)  $($setup.Name)"
-
-      - name: Publish the release
+      # The release is created as a draft with every asset, so nobody sees a release with half its
+      # files; the next step checks the draft, and the last one publishes it. This job runs only
+      # after the Approve click on the `release` environment.
+      - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-          PRODUCT: ${{ steps.version.outputs.name }}
+          VERSION: ${{ needs.verify-tag.outputs.version }}
         run: |
-          $setup = Get-Item artifacts\installer\*.exe
-          gh release create $env:GITHUB_REF_NAME $setup.FullName "$($setup.FullName).sha256" --title "$env:PRODUCT $env:VERSION" --notes-file release-notes.md --verify-tag
+          gh release create "$GITHUB_REF_NAME" dist/* sbom.cdx.json \
+            --title "$PRODUCT $VERSION" --notes-file release-notes.md --verify-tag --draft
+          echo "Draft created for $GITHUB_REF_NAME."
+      # The draft holds exactly the files that were checked against the sidecar.
+      - name: The draft holds every asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          expected="$( { (cd dist && ls -1); printf '%s\n' sbom.cdx.json; } | sort)"
+          actual="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | sort)"
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::the draft's assets differ from the checked files"
+            diff <(echo "$expected") <(echo "$actual") || true
+            exit 1
+          fi
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest

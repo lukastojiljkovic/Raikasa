@@ -1,0 +1,290 @@
+# The nightly sweep: what is too slow for every pull request, or can break without a commit.
+# Template: engineering-standard.md, sections 3, 7.3 and 9.
+#
+#   ci         the whole CI on main again (new runner image, new advisory, new toolchain)
+#   mutation   the whole Core project, gated by .github/mutation-ratchet.json (the one
+#              ratchet file; pr-policy.yml refuses a pull request that lowers it)
+#   fuzz       every fuzz target for ten minutes, the inputs it finds kept in the cache; every
+#              target runs even when one crashes
+#   runtime    the runtime that the self-contained build would bundle is the newest patch of
+#              its channel, so a security update of the runtime is noticed the day it ships
+#   links      external links of the site and the docs
+#   report     keeps ONE issue labelled `nightly-failure` (opened on a red night, closed on a
+#              green one) and ONE labelled `mutation-ratchet` while the measured score is above
+#              the ratchet, so a red night or a ratchet to raise is visible in the repository
+#              and in program-health.ps1
+#
+# Public repositories run nightly. Scheduled workflows of a public repository stop after 60 days
+# without activity; program-health.ps1 reports a disabled workflow as red.
+#
+# Every job that builds, tests or packages runs on windows-2025, as in ci.yml. The product name
+# is not spelled here: the product action reads it from Directory.Build.props.
+#
+# harden-runner: every Linux job but `links` starts with it on public repositories, in block mode
+# with telemetry off and a per-job endpoint list; the Windows jobs carry none (its free tier
+# allows audit mode only there). A scheduled run has no event payload, so
+# `github.event.repository.visibility` is empty on the very runs this file exists for; the
+# `visibility` job reads it from the API, and each step tests its output. `links` has none: block
+# mode cannot pass a check of external links, whose hosts are whatever the docs link to.
+
+name: Nightly
+
+on:
+  schedule:
+    - cron: "7 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+# A scheduled run and a manual one must not overlap: both write the two tracking issues.
+# The group is not the CI's (`ci-<event>-<ref>`), so the nightly's call to ci.yml never waits on it.
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+env:
+  # no .NET CLI telemetry (PG-D14; as ci.yml)
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  # no GitHub CLI telemetry (PG-D14): gh sends sampled telemetry by default since 2026-04
+  GH_TELEMETRY: "0"
+  # no PowerShell telemetry (PG-D14): "true, yes, or 1" turns it off
+  POWERSHELL_TELEMETRY_OPTOUT: "1"
+
+jobs:
+  visibility:
+    # A scheduled run has no event payload ("Not applicable" in GitHub's events reference); the
+    # API answers on every event. This job's own harden-runner step can only test the event, so
+    # it runs on a manual run and is skipped on a scheduled one.
+    name: Repository visibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      public: ${{ steps.v.outputs.public }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }} # false on a schedule, whose payload has no repository
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # the visibility query
+          allowed-endpoints: >
+            api.github.com:443
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Assigned first, so a failed API call fails the step (bash -e) instead of writing an
+        # empty `public=` that would run the jobs below without their harden-runner step.
+        run: |
+          v="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility == "public"')"
+          echo "public=$v" >> "$GITHUB_OUTPUT"
+
+  ci:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+
+  mutation-dotnet:
+    runs-on: windows-2025
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash # Git Bash on windows-2025, as in ci.yml
+    outputs:
+      floor: ${{ steps.score.outputs.floor }}
+      threshold: ${{ steps.score.outputs.threshold }}
+    steps:
+      # No harden-runner on Windows: its free tier allows audit mode only.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      - run: dotnet tool install dotnet-stryker --version 5.0.0 --tool-path .tools
+      # Stryker.NET refuses break > low and low > high, so high is 100 and low and break are both
+      # the ratchet: valid for every ratchet from 0 to 100.
+      - run: |
+          r="$(jq -r '.percent' .github/mutation-ratchet.json)"
+          .tools/dotnet-stryker --config-file stryker-config.json \
+            --solution "$SOLUTION" --project "$(basename "$CORE_PROJECT")" --test-project "$TEST_PROJECT" \
+            --threshold-high 100 --threshold-low "$r" --break-at "$r"
+      # The newest report: StrykerOutput/<yyyy-MM-dd.HH-mm-ss>/, so the last name in glob order is
+      # the newest (a glob array, not ls). No report is exit 2.
+      - id: score
+        if: ${{ !cancelled() }}
+        run: |
+          shopt -s nullglob
+          reports=(StrykerOutput/*/reports/mutation-report.json)
+          if [ ${#reports[@]} -eq 0 ]; then echo "::error::Stryker.NET wrote no mutation-report.json"; exit 2; fi
+          node .github/scripts/mutation-gate.mjs score --format stryker --report "${reports[-1]}" --ratchet .github/mutation-ratchet.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: mutation-report
+          path: StrykerOutput/
+          retention-days: 14
+
+  fuzz-dotnet:
+    # windows-2025 with the Windows build of libfuzzer-dotnet, because the targets are
+    # net10.0-windows. Each target runs for ten minutes (seven targets, so about seventy minutes).
+    runs-on: windows-2025
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash # Git Bash on windows-2025, as in ci.yml
+    steps:
+      # No harden-runner on Windows: its free tier allows audit mode only.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      - run: dotnet tool install SharpFuzz.CommandLine --version 2.3.0 --tool-path .tools
+      - name: Install libfuzzer-dotnet
+        env:
+          VERSION: "v2025.05.02.0904"
+          ASSET: "libfuzzer-dotnet-windows.exe"
+          # The release publishes no checksum; the SHA-256 of the Windows asset as downloaded when
+          # the job was written, the same pin as ci.yml's fuzz-build.
+          SHA256: "17af5b3f6ff4d2c57b44b9a35c13051b570eb66f0557d00015df3832709050bf"
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/libfuzzer-dotnet.exe" \
+            "https://github.com/Metalnem/libfuzzer-dotnet/releases/download/${VERSION}/${ASSET}"
+          echo "${SHA256}  $RUNNER_TEMP/libfuzzer-dotnet.exe" | sha256sum --check --strict
+      - run: dotnet restore "$FUZZ_PROJECT" --locked-mode
+      - run: dotnet publish "$FUZZ_PROJECT" -c Release --no-restore -o fuzz-out
+      - run: for dll in $FUZZ_TARGET_DLLS; do .tools/sharpfuzz "fuzz-out/$dll"; done
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz/work
+          key: fuzz-work-${{ github.run_id }}
+          restore-keys: fuzz-work-
+      - run: FUZZ_SECONDS=600 bash fuzz/run.sh fuzz "$RUNNER_TEMP/libfuzzer-dotnet.exe" "fuzz-out/$(basename "$FUZZ_PROJECT" .csproj).dll"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ failure() }}
+        with:
+          name: fuzz-crashes-dotnet
+          path: fuzz/artifacts/
+          retention-days: 30
+
+  runtime:
+    # The runtime that a self-contained publish of the shipped project would bundle, read from its
+    # restore result, against Microsoft's release metadata. release.yml makes the same check on the
+    # published folder before anything is released.
+    name: Bundled runtime is the newest patch
+    runs-on: windows-2025
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash # Git Bash on windows-2025, as in ci.yml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      - run: dotnet restore "$PUBLISH_PROJECT" --locked-mode
+      - run: node .github/scripts/check-runtime-patch.mjs --assets "$(dirname "$PUBLISH_PROJECT")/obj/project.assets.json"
+
+  links:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      # No harden-runner: block mode cannot pass a check of external links (see the header).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # lychee is installed by archive SHA-256, as pr-policy.yml installs it.
+      - name: Install lychee
+        env:
+          VERSION: "0.24.2"
+          SHA256: "1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a"
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/lychee.tar.gz" \
+            "https://github.com/lycheeverse/lychee/releases/download/lychee-v${VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${SHA256}  $RUNNER_TEMP/lychee.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/lychee.tar.gz" -C "$RUNNER_TEMP" --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
+          "$RUNNER_TEMP/lychee" --version
+      # External links break without a commit here, so they are checked at night. The token is the
+      # job's read-only one, so github.com links are not refused by the anonymous rate limit.
+      - name: External links
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: '"$RUNNER_TEMP/lychee" --no-progress --max-retries 3 --exclude-path internal "site/**/*.html" "**/*.md"'
+
+  report:
+    name: Report the night
+    if: ${{ always() }}
+    # Keep this list equal to the jobs above.
+    needs: [visibility, ci, mutation-dotnet, fuzz-dotnet, runtime, links]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ needs.visibility.outputs.public == 'true' }}
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # the issue and label calls of gh
+          allowed-endpoints: >
+            api.github.com:443
+      # shell: bash is `bash -eo pipefail`: without pipefail, a failed `jq ... | paste` would leave
+      # `failed` empty, report the night green and close the open nightly-failure issue.
+      - shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULTS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # A ratchet to raise: a mutation job measured a floor above its threshold.
+          # (An empty output is truthy in jq, so it is compared as a string first.)
+          raise="$(jq -r 'to_entries[] | select((.value.outputs.floor // "") != "" and (.value.outputs.threshold // "") != "")
+            | select((.value.outputs.floor | tonumber) > (.value.outputs.threshold | tonumber))
+            | "\(.key) measured \(.value.outputs.floor)% against a ratchet of \(.value.outputs.threshold)%"' <<<"$RESULTS" | paste -sd';' -)"
+          gh label create mutation-ratchet -R "$GITHUB_REPOSITORY" --color 0E8A16 --description "Raise .github/mutation-ratchet.json" --force
+          ropen="$(gh issue list -R "$GITHUB_REPOSITORY" --label mutation-ratchet --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$raise" ]; then
+            body="Raise .github/mutation-ratchet.json to the measured floor in a pull request: $raise. Run: $RUN_URL"
+            if [ -n "$ropen" ]; then gh issue comment "$ropen" -R "$GITHUB_REPOSITORY" --body "$body"
+            else gh issue create -R "$GITHUB_REPOSITORY" --title "Raise the mutation ratchet" --label mutation-ratchet --body "$body"; fi
+          elif [ -n "$ropen" ]; then
+            gh issue close "$ropen" -R "$GITHUB_REPOSITORY" --comment "The ratchet equals the measured score: $RUN_URL"
+          fi
+
+          failed="$(jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key' <<<"$RESULTS" | paste -sd, -)"
+          gh label create nightly-failure -R "$GITHUB_REPOSITORY" --color B60205 --description "The nightly sweep failed" --force
+          open="$(gh issue list -R "$GITHUB_REPOSITORY" --label nightly-failure --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$failed" ]; then
+            body="The nightly run failed in: $failed. Run: $RUN_URL"
+            if [ -n "$open" ]; then gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$body"
+            else gh issue create -R "$GITHUB_REPOSITORY" --title "Nightly run failed" --label nightly-failure --body "$body"; fi
+            exit 1
+          elif [ -n "$open" ]; then
+            gh issue close "$open" -R "$GITHUB_REPOSITORY" --comment "The nightly run is green again: $RUN_URL"
+          fi
