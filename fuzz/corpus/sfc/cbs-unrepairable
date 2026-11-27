@@ -1,0 +1,3 @@
+2026-11-01 10:00:00, Info                  CSI    00000001 [SR] Verifying 100 components
+2026-11-01 10:00:01, Info                  CSI    00000002 [SR] Cannot repair member file [l:10]"x.dll" of Microsoft-Windows-X
+2026-11-01 10:00:02, Info                  CSI    00000003 [SR] Verify complete

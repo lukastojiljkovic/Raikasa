@@ -8,4 +8,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Raikasa.Core.Tests/Raikasa.Core.Tests.csproj" />
   </Folder>
+  <Folder Name="/fuzz/">
+    <Project Path="fuzz/Raikasa.Fuzz/Raikasa.Fuzz.csproj" />
+  </Folder>
 </Solution>

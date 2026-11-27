@@ -1,0 +1,4 @@
+{"found":2}
+{"installed":"Update A"}
+{"failed":"Update B","hresult":-2145091577}
+{"done":true,"restart":true}
