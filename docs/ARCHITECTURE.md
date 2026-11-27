@@ -256,6 +256,12 @@ continues until the current step finishes.
 - History: `%LOCALAPPDATA%\Raikasa\History\<run>.json`, the last 50 runs.
 - Raw output logs: `%LOCALAPPDATA%\Raikasa\Logs\<run>.log`.
 - The uninstaller removes the registry key, the data folder, the reminder task and the notification registration.
+- 2.0.0 kept the same items under the product's previous name. The first start of the window moves them
+  (`Core/Migration/`): the data folder by a rename, or by copying, verifying each file by length and SHA-256, and only
+  then removing the old files; the settings key whole, where a value already under the new key wins; the reminder task
+  is registered again under the new name if the reminder is on, and the old task, notification registration and link
+  are removed. It does nothing once the old items are gone, continues a move that stopped part way, and refuses
+  folders that hold a link. The uninstaller removes the items of both names.
 
 ## Reminder
 

@@ -4,6 +4,15 @@
 # as {ProductName}, the value in Directory.Build.props.
 name: Refreshify
 
+# The first start's migration and the uninstaller, which move or remove what 2.0.0 left under the previous name.
+src/{ProductName}.Core/Migration/LegacyNames.cs: "Refreshify"
+src/{ProductName}.Core/Migration/LegacyNames.cs: @"Software\Classes\refreshify"
+tests/{ProductName}.Core.Tests/Migration/LegacyNamesTests.cs: "Refreshify"
+tests/{ProductName}.Core.Tests/Migration/LegacyNamesTests.cs: @"Software\Refreshify"
+tests/{ProductName}.Core.Tests/Migration/LegacyNamesTests.cs: @"Software\Classes\AppUserModelId\LukaStojiljkovic.Refreshify"
+tests/{ProductName}.Core.Tests/Migration/LegacyNamesTests.cs: @"Software\Classes\refreshify"
+tests/{ProductName}.Core.Tests/Migration/LegacyNamesTests.cs: "Refreshify reminder-"
+
 # The CHANGELOG's entries for the releases made under the previous name.
 CHANGELOG.md: Refreshify now tells you how your PC is doing
 CHANGELOG.md: where Refreshify has a tool for it

@@ -35,17 +35,25 @@ public static partial class Program
             return 0;
         }
 
+        // Before the window reads any setting.
+        PreviousNameMigration.RunAtStart();
         XamlGeneratedProgram.XamlGeneratedMain();
         return 0;
     }
 
-    /// <summary>Run by the uninstaller: removes everything Raikasa created for the current user.</summary>
+    /// <summary>
+    /// Run by the uninstaller: removes everything the app created for the current user, under its current name and the
+    /// previous one.
+    /// </summary>
     private static async Task UninstallAsync()
     {
+        var previousRemoved = await PreviousNameMigration.RemoveAsync();
         await Reminder.RemoveAsync();
         AppSettings.Clear();
         if (Directory.Exists(RunCoordinator.DataDirectory))
             Directory.Delete(RunCoordinator.DataDirectory, recursive: true);
+        if (!previousRemoved)
+            throw new IOException("Some of the items saved under the previous name couldn't be removed.");
     }
 
     /// <summary>Windowless modes report failure through the exit code.</summary>

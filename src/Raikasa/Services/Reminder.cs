@@ -71,6 +71,11 @@ internal static class Reminder
         AppSettings.LastReminder = now;
     }
 
+    /// <summary>Deletes a task of this user's by name.</summary>
+    /// <returns><see langword="true"/> when no task of that name is left, also when there was none.</returns>
+    public static async Task<bool> DeleteTaskAsync(string name) =>
+        await SchtasksAsync($"/Query /TN \"{name}\"") != 0 || await SchtasksAsync($"/Delete /TN \"{name}\" /F") == 0;
+
     /// <summary>Removes the task, the notification sender and the link, for the uninstaller.</summary>
     public static async Task RemoveAsync()
     {
