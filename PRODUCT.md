@@ -9,17 +9,17 @@ windows
 
 People who maintain their own Windows PC and want the usual cleanup, repair and update tasks done without opening a
 terminal. They understand what the underlying Windows tools do, or are willing to read a one-line explanation, and they
-run Refreshify on a machine they are allowed to maintain. The app is used in English.
+run Raikasa on a machine they are allowed to maintain. The app is used in English.
 
 ## Product Purpose
 
-Refreshify runs the maintenance tools Windows already has, plus winget, from one window and shows what each one did.
+Raikasa runs the maintenance tools Windows already has, plus winget, from one window and shows what each one did.
 It replaces a sequence of typed commands such as `DISM /RestoreHealth`, `sfc /scannow`, `chkdsk /scan` and
 `winget upgrade` with a catalog the user can read, choose from and run in a safe order.
 
 ## Positioning
 
-Refreshify is free and open source (MIT). It does not bundle its own cleaner: every tool it runs is a Windows tool or
+Raikasa is free and open source (MIT). It does not bundle its own cleaner: every tool it runs is a Windows tool or
 winget, so its results depend on them. It offers no accounts, telemetry, analytics or ads, and the only request it makes
 itself is the update check against GitHub. Its distinguishing choices are plain-language explanations, a restore point
 before a run, a single administrator approval per session, and a report for a failed step that the user can paste into
@@ -30,7 +30,7 @@ an AI assistant with personal details hidden.
 - Windows 11 is the tested target (Windows 11 Pro 25H2, build 26200). It also runs on Windows 10 version 1809 or
   later, x64, but Windows 10 has not been tested.
 - Administrator tools run in an elevated helper that starts on the first such step and lasts for the session.
-- Refreshify works on a PC with no network except for the tools that need one: Windows Update, System image repair,
+- Raikasa works on a PC with no network except for the tools that need one: Windows Update, System image repair,
   Defender definitions, time sync, App updates (winget) and the update check.
 - Runs are recorded in History with their duration and the space they freed, and raw output is kept as logs.
 
@@ -54,7 +54,7 @@ Constraints:
   uninstaller.
 - The installer is not code-signed, so SmartScreen may warn; the release publishes a SHA-256 checksum to check the
   download.
-- Refreshify can only fix what Windows' own tools can fix, and the Defender tools are skipped when another antivirus
+- Raikasa can only fix what Windows' own tools can fix, and the Defender tools are skipped when another antivirus
   protects the PC.
 
 ## Brand Commitments
@@ -78,7 +78,7 @@ Constraints:
   uninstall smoke test.
 - Releases from `.github/workflows/release.yml`: the installer, a `.sha256` checksum file, build provenance
   attestation, and release notes taken from `CHANGELOG.md`.
-- Unit tests in `tests/Refreshify.Core.Tests` (xUnit v3); the README states the suite runs 338 tests.
+- Unit tests in `tests/Raikasa.Core.Tests` (xUnit v3); the README states the suite runs 338 tests.
 - `CHANGELOG.md`, `TERMS.md`, `PRIVACY.md`, `THIRD-PARTY-NOTICES.md` and `SECURITY.md`.
 
 Not on hand: no user metrics, no download counts, no testimonials, no benchmarks, and no independent security audit.
@@ -95,7 +95,7 @@ None should be invented.
 
 ## Accessibility & Inclusion
 
-Refreshify uses standard WinUI 3 / Fluent controls and theme resources, so it follows the Windows theme, contrast and
+Raikasa uses standard WinUI 3 / Fluent controls and theme resources, so it follows the Windows theme, contrast and
 text-scaling settings, and it ships light and dark themes plus a "use system setting" option. Controls carry
 `AutomationProperties` names, and the README describes UI Automation coverage of the pages, dialogs, settings
 persistence and themes. The interface is English only; that is a decision, not an oversight.

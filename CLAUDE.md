@@ -1,4 +1,4 @@
-# Refreshify
+# Raikasa
 
 Native Windows 11 maintenance utility (WinUI 3). It runs built-in Windows tools (DISM, SFC, chkdsk, cache cleanup,
 network resets, Windows Update, winget, Defender) as hidden processes and shows everything in the GUI. The design is in
@@ -7,27 +7,27 @@ network resets, Windows Update, winget, Defender) as hidden processes and shows 
 ## Commands
 
 ```powershell
-dotnet test --project tests/Refreshify.Core.Tests           # unit tests (Microsoft.Testing.Platform, xUnit v3)
-dotnet build src/Refreshify -c Release -p:Platform=x64      # WinUI projects need an explicit Platform
-dotnet run --project src/Refreshify -p:Platform=x64
-dotnet format Refreshify.slnx --verify-no-changes           # the CI lint step
+dotnet test --project tests/Raikasa.Core.Tests              # unit tests (Microsoft.Testing.Platform, xUnit v3)
+dotnet build src/Raikasa -c Release -p:Platform=x64         # WinUI projects need an explicit Platform
+dotnet run --project src/Raikasa -p:Platform=x64
+dotnet format Raikasa.slnx --verify-no-changes              # the CI lint step
 .\build.ps1                                                 # tests, publish, licenses, installer
 ```
 
 ## Layout
 
-- `src/Refreshify.Core`: all logic, no UI. Tools (`Tools/`), the catalog (`Catalog/ToolCatalog.cs`), process runner
+- `src/Raikasa.Core`: all logic, no UI. Tools (`Tools/`), the catalog (`Catalog/ToolCatalog.cs`), process runner
   and Windows helpers (`Platform/`), known issues and the LLM report (`Diagnostics/`), run engine and history
   (`Engine/`), elevated worker protocol (`Worker/`), PowerShell scripts embedded as resources (`Scripts/`).
-- `src/Refreshify`: WinUI 3 app. `Program.cs` also dispatches `--worker`, `--reminder` and `--uninstall`.
-- `tests/Refreshify.Core.Tests`: unit tests. None of them change the system, so CI runs them all. Tools that need
+- `src/Raikasa`: WinUI 3 app. `Program.cs` also dispatches `--worker`, `--reminder` and `--uninstall`.
+- `tests/Raikasa.Core.Tests`: unit tests. None of them change the system, so CI runs them all. Tools that need
   administrator rights are verified by hand (README, *Verifying the administrator tools*).
 
 ## Rules
 
 - English only: code, UI text, docs, commits.
 - The product name is spelled once in `Directory.Build.props` (`ProductName`, which the project names, the installer and
-  `build.ps1` follow) and once in C# (`src/Refreshify.Core/ProductInfo.cs`, which every runtime id uses). XAML text and
+  `build.ps1` follow) and once in C# (`src/Raikasa.Core/ProductInfo.cs`, which every runtime id uses). XAML text and
   the documents keep the literal name.
 - Never show invented numbers. Only measured values (bytes deleted, updates installed) reach the UI or docs.
 - Detection must not depend on localized console text: use exit codes, HRESULTs, `DISM /English`, `CBS.log`, and

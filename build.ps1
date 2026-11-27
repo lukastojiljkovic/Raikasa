@@ -1,10 +1,10 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Tests Refreshify, publishes a self-contained x64 build with its third-party licenses and compiles the Inno Setup
+    Tests Raikasa, publishes a self-contained x64 build with its third-party licenses and compiles the Inno Setup
     installer.
 .OUTPUTS
-    artifacts\installer\Refreshify-<version>-Setup.exe
+    artifacts\installer\Raikasa-<version>-Setup.exe
 #>
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot

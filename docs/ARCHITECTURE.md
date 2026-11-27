@@ -1,6 +1,6 @@
-# Refreshify architecture
+# Raikasa architecture
 
-Refreshify is a native Windows 11 utility that runs the built-in Windows maintenance tools (DISM, SFC, chkdsk, cache
+Raikasa is a native Windows 11 utility that runs the built-in Windows maintenance tools (DISM, SFC, chkdsk, cache
 cleanup, network resets, Windows Update, winget, Microsoft Defender) in the background and presents everything through
 a WinUI 3 interface. Users never see a console window: progress, results and errors are shown in plain language.
 
@@ -95,20 +95,20 @@ because a damaged component store makes updates fail. DISM always runs before SF
 ## Architecture
 
 ```text
-src/Refreshify.Core          All logic, no UI: catalog, tools, process runner, parsers, run engine, known issues,
+src/Raikasa.Core          All logic, no UI: catalog, tools, process runner, parsers, run engine, known issues,
                              LLM report, worker protocol, history. Unit tested.
-src/Refreshify               WinUI 3 app. The same executable hosts the elevated worker (--worker) and the
+src/Raikasa               WinUI 3 app. The same executable hosts the elevated worker (--worker) and the
                              reminder (--reminder).
-tests/Refreshify.Core.Tests  xUnit v3
-installer/Refreshify.iss     Inno Setup 6
+tests/Raikasa.Core.Tests  xUnit v3
+installer/Raikasa.iss     Inno Setup 6
 ```
 
 ### Process model
 
 ```text
-Refreshify.exe (medium integrity, UI)
+Raikasa.exe (medium integrity, UI)
   ├─ runs User tools in-process
-  └─ named pipe ──► Refreshify.exe --worker <pipe> <ui-pid> (elevated, started once per session with Verb=runas)
+  └─ named pipe ──► Raikasa.exe --worker <pipe> <ui-pid> (elevated, started once per session with Verb=runas)
                        └─ runs Admin tools, starts hidden child processes (dism, sfc, powershell, winget, …)
 ```
 
@@ -208,7 +208,7 @@ Each remedy is attempted at most once per step, so fixes can't loop.
 
 When a failure has no remedy, or its remedy didn't work, **Get help** opens a dialog with a copyable Markdown report:
 
-- Windows edition, version, build, architecture and display language; Refreshify version
+- Windows edition, version, build, architecture and display language; Raikasa version
 - every step of the run with its outcome
 - the failed step: command lines, exit code / HRESULT, detected issue, fixes already tried
 - the last lines of its output and the relevant log excerpt (`CBS.log` `[SR]` lines, `dism.log` errors)
@@ -252,17 +252,23 @@ continues until the current step finishes.
 
 ## Settings and data
 
-- Preferences: DWORDs in `HKCU\Software\Refreshify`. Per-tool *Run all* selection: `HKCU\Software\Refreshify\Tools`.
-- History: `%LOCALAPPDATA%\Refreshify\History\<run>.json`, the last 50 runs.
-- Raw output logs: `%LOCALAPPDATA%\Refreshify\Logs\<run>.log`.
+- Preferences: DWORDs in `HKCU\Software\Raikasa`. Per-tool *Run all* selection: `HKCU\Software\Raikasa\Tools`.
+- History: `%LOCALAPPDATA%\Raikasa\History\<run>.json`, the last 50 runs.
+- Raw output logs: `%LOCALAPPDATA%\Raikasa\Logs\<run>.log`.
 - The uninstaller removes the registry key, the data folder, the reminder task and the notification registration.
+- 2.0.0 kept the same items under the product's previous name. The first start of the window moves them
+  (`Core/Migration/`): the data folder by a rename, or by copying, verifying each file by length and SHA-256, and only
+  then removing the old files; the settings key whole, where a value already under the new key wins; the reminder task
+  is registered again under the new name if the reminder is on, and the old task, notification registration and link
+  are removed. It does nothing once the old items are gone, continues a move that stopped part way, and refuses
+  folders that hold a link. The uninstaller removes the items of both names.
 
 ## Reminder
 
-Off by default. When set to every 1, 2, 3 or 6 months, Refreshify registers a per-user scheduled task that starts
-`Refreshify.exe --reminder` daily. That mode checks the last full refresh and the last reminder. If a reminder is due,
-it shows a Windows notification that opens Refreshify when clicked, then exits. The click opens `refreshify:`, a
-per-user link that starts Refreshify without arguments. A second start hands over to the open window.
+Off by default. When set to every 1, 2, 3 or 6 months, Raikasa registers a per-user scheduled task that starts
+`Raikasa.exe --reminder` daily. That mode checks the last full refresh and the last reminder. If a reminder is due,
+it shows a Windows notification that opens Raikasa when clicked, then exits. The click opens `raikasa:`, a
+per-user link that starts Raikasa without arguments. A second start hands over to the open window.
 
 ## Testing
 
@@ -279,7 +285,8 @@ per-user link that starts Refreshify without arguments. A second start hands ove
 - .NET 10 (`net10.0-windows10.0.26100.0`), Windows App SDK 2.x (WinUI 3), unpackaged and self-contained, x64.
 - `build.ps1`: test → publish (ReadyToRun) → collect third-party licenses → Inno Setup installer.
 - GitHub Actions:
-  - **CI** on pushes and pull requests: format check, tests, build and installer artifact, and an install and
+  - **CI** on pushes and pull requests: format check, a check that the previous name appears only where
+    `.github/scripts/old-name-allow-list.txt` allows it, tests, build and installer artifact, and an install and
     uninstall smoke test of the installer.
   - **Release** on `v*` tags: checks that the tag matches the version, builds, publishes the installer with its SHA-256
     and build provenance attestation, and uses the matching `CHANGELOG.md` section as release notes.

@@ -1,5 +1,5 @@
 ---
-name: Refreshify
+name: Raikasa
 description: "A native WinUI 3 interface built entirely from Fluent controls and theme resources: standard cards on a Mica backdrop, one accent colour the user picks in Windows, and a single type ramp, with a separate black-and-white brochure palette for the product site."
 
 colors:
@@ -68,16 +68,16 @@ components:
     padding: "32,20,32,24"
 ---
 
-# Design System: Refreshify
+# Design System: Raikasa
 
 ## Overview
 
 **Creative North Star: "One Fluent window, no terminal"**
 
-Refreshify looks like a Windows settings page rather than a custom tool. It is stock WinUI 3: a `MicaBackdrop`, the
+Raikasa looks like a Windows settings page rather than a custom tool. It is stock WinUI 3: a `MicaBackdrop`, the
 WinUI `TitleBar` and a `NavigationView`, with every surface drawn from Fluent theme resources instead of app colours.
 The one chromatic decision is the accent colour, which comes from the user's Windows personalization. The app defines
-only a handful of styles of its own: most in `src/Refreshify/App.xaml`, and a few beside the views and dialogs that use
+only a handful of styles of its own: most in `src/Raikasa/App.xaml`, and a few beside the views and dialogs that use
 them (`RunView.xaml`, `WelcomeDialog.xaml`).
 
 The product site under `site/` is deliberately different: a black title band on white paper, a 12-column grid and one
@@ -94,7 +94,7 @@ app's Fluent look.
 
 ## Colors
 
-The app defines no palette of its own. Every brush is a WinUI theme resource referenced from `src/Refreshify/App.xaml`:
+The app defines no palette of its own. Every brush is a WinUI theme resource referenced from `src/Raikasa/App.xaml`:
 
 | Token | Fluent resource | Used for |
 | --- | --- | --- |
@@ -118,7 +118,7 @@ not used for decoration.
 
 ## Typography
 
-Type is the WinUI ramp, used through its named styles rather than custom sizes, from `src/Refreshify/App.xaml` and the
+Type is the WinUI ramp, used through its named styles rather than custom sizes, from `src/Raikasa/App.xaml` and the
 views:
 
 | Token | WinUI style | Used for |
@@ -159,7 +159,7 @@ than a shadow.
 ## Shapes
 
 One corner radius runs through the app: cards, settings rows and card buttons are `{rounded.control}`
-(`ControlCornerRadius`, from `src/Refreshify/App.xaml`). Icon buttons are `width: 36` by `height: 32`
+(`ControlCornerRadius`, from `src/Raikasa/App.xaml`). Icon buttons are `width: 36` by `height: 32`
 (`{components.icon-button}`) with the same control radius. The only exception is the two panes on the Run page, whose
 `PaneStyle` uses Fluent's own `OverlayCornerRadius`. The product site is the opposite: buttons are
 `{rounded.siteButton}` and everything else is square.

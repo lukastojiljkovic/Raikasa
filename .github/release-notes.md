@@ -1,4 +1,4 @@
-Refreshify cleans up, repairs and updates your PC with the tools Windows already has, in one native Windows 11 app.
+Raikasa cleans up, repairs and updates your PC with the tools Windows already has, in one native Windows 11 app.
 
 ## What's new
 
@@ -11,12 +11,12 @@ Refreshify cleans up, repairs and updates your PC with the tools Windows already
 SHA-256: `{{SHA256}}`
 
 - **SmartScreen.** The installer isn't code-signed yet, so Windows may warn you. Check the hash with `Get-FileHash .\{{FILE}}`, then select **More info** > **Run anyway**.
-- **Administrator approval.** Setup installs to Program Files. Refreshify starts its own exe as administrator for the tools that need it, so it must live where only administrators can replace it.
+- **Administrator approval.** Setup installs to Program Files. Raikasa starts its own exe as administrator for the tools that need it, so it must live where only administrators can replace it.
 - **Provenance.** GitHub attests that this installer was built by this repository's release workflow: `gh attestation verify {{FILE}} --repo {{REPOSITORY}}`.
 
 ## Verification
 
-The [release build]({{RUN_URL}}) passed all {{TESTS}} unit tests before it built this installer. The README describes [how Refreshify is verified]({{SERVER}}/{{REPOSITORY}}#verification), including how to check the administrator tools.
+The [release build]({{RUN_URL}}) passed all {{TESTS}} unit tests before it built this installer. The README describes [how Raikasa is verified]({{SERVER}}/{{REPOSITORY}}#verification), including how to check the administrator tools.
 
 ## Limitations
 
