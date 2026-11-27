@@ -13,6 +13,10 @@ tests/{ProductName}.Core.Tests/Migration/LegacyNamesTests.cs: @"Software\Classes
 tests/{ProductName}.Core.Tests/Migration/LegacyNamesTests.cs: @"Software\Classes\refreshify"
 tests/{ProductName}.Core.Tests/Migration/LegacyNamesTests.cs: "Refreshify reminder-"
 
+# The two shortcuts 2.0.0's Setup created, which Setup deletes.
+installer/{ProductName}.iss: {commonprograms}\Refreshify.lnk
+installer/{ProductName}.iss: {commondesktop}\Refreshify.lnk
+
 # The CHANGELOG's entries for the releases made under the previous name.
 CHANGELOG.md: Refreshify now tells you how your PC is doing
 CHANGELOG.md: where Refreshify has a tool for it

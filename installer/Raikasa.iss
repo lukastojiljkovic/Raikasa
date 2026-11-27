@@ -42,9 +42,10 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 ; Raikasa starts its own exe as administrator, so it must live where only administrators can replace it.
 PrivilegesRequired=admin
-; Also closes the elevated helper, which is the same exe.
+; Closes every running copy before its files are replaced: the window and its elevated helper, which are the same exe,
+; and a version from before the rename, whose exe has another name but loads the same runtime DLLs.
 CloseApplications=yes
-CloseApplicationsFilter={#AppExeName}
+CloseApplicationsFilter=*.exe,*.dll
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -70,3 +71,39 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; F
 ; Removes the reminder task, the notification registration, the settings and the history. They belong to the account
 ; that approves the uninstaller, which is the signed-in user in the usual case of an administrator account.
 Filename: "{app}\{#AppExeName}"; Parameters: "--uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveUserData"
+
+[Code]
+const
+  DirectoryAttribute = $10;
+  ReparsePointAttribute = $400;
+
+// The version from before the rename created its shortcuts under its own name, which this version doesn't replace.
+// Deletes one of them if it is a plain file: never a folder, and never a link, which stays as it is.
+procedure DeletePreviousShortcut(const Path: String);
+var
+  Entry: TFindRec;
+  PlainFile: Boolean;
+begin
+  if not FindFirst(Path, Entry) then
+    Exit;
+  try
+    PlainFile := (Entry.Attributes and (DirectoryAttribute or ReparsePointAttribute)) = 0;
+  finally
+    FindClose(Entry);
+  end;
+  if not PlainFile then
+    Log('Left ' + Path + ', which is not a plain file.')
+  else if DeleteFile(Path) then
+    Log('Deleted the previous shortcut ' + Path + '.')
+  else
+    Log('Could not delete the previous shortcut ' + Path + '.');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    DeletePreviousShortcut(ExpandConstant('{commonprograms}\Refreshify.lnk'));
+    DeletePreviousShortcut(ExpandConstant('{commondesktop}\Refreshify.lnk'));
+  end;
+end;
