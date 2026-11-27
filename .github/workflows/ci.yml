@@ -28,6 +28,10 @@ jobs:
       - name: Check formatting
         run: dotnet format Raikasa.slnx --verify-no-changes
 
+      # The previous name may appear only where .github/scripts/old-name-allow-list.txt allows it.
+      - name: Check for the previous name
+        run: node .github/scripts/check-old-name.mjs
+
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
 

@@ -1,0 +1,17 @@
+# The only places where the product's previous name may appear, checked by check-old-name.mjs in CI. Each entry is
+# `path: literal`: on a line of that file, exactly that text is allowed (case-sensitive). Any other occurrence of the
+# name in a tracked file, in any case, fails, and so does an entry that matches nothing. A path spells the current name
+# as {ProductName}, the value in Directory.Build.props.
+name: Refreshify
+
+# The CHANGELOG's entries for the releases made under the previous name.
+CHANGELOG.md: Refreshify now tells you how your PC is doing
+CHANGELOG.md: where Refreshify has a tool for it
+CHANGELOG.md: start a new version, Refreshify shows what changed in that version
+CHANGELOG.md: Refreshify checks GitHub for a newer release when it starts
+CHANGELOG.md: Known problems: Refreshify recognizes 15 common failures
+CHANGELOG.md: [2.0.0]: https://github.com/lukastojiljkovic/Refreshify/compare/v1.2.1...v2.0.0
+CHANGELOG.md: [1.2.1]: https://github.com/lukastojiljkovic/Refreshify/compare/v1.2.0...v1.2.1
+CHANGELOG.md: [1.2.0]: https://github.com/lukastojiljkovic/Refreshify/compare/v1.1.0...v1.2.0
+CHANGELOG.md: [1.1.0]: https://github.com/lukastojiljkovic/Refreshify/compare/v1.0.0...v1.1.0
+CHANGELOG.md: [1.0.0]: https://github.com/lukastojiljkovic/Refreshify/releases/tag/v1.0.0

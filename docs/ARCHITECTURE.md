@@ -279,7 +279,8 @@ per-user link that starts Raikasa without arguments. A second start hands over t
 - .NET 10 (`net10.0-windows10.0.26100.0`), Windows App SDK 2.x (WinUI 3), unpackaged and self-contained, x64.
 - `build.ps1`: test → publish (ReadyToRun) → collect third-party licenses → Inno Setup installer.
 - GitHub Actions:
-  - **CI** on pushes and pull requests: format check, tests, build and installer artifact, and an install and
+  - **CI** on pushes and pull requests: format check, a check that the previous name appears only where
+    `.github/scripts/old-name-allow-list.txt` allows it, tests, build and installer artifact, and an install and
     uninstall smoke test of the installer.
   - **Release** on `v*` tags: checks that the tag matches the version, builds, publishes the installer with its SHA-256
     and build provenance attestation, and uses the matching `CHANGELOG.md` section as release notes.
