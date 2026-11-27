@@ -1,0 +1,2 @@
+# Links inside release-notes.md are placeholders that release.yml fills in; they are not links to check.
+exclude = ['%7B%7B', '[{][{]']

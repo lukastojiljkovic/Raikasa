@@ -34,6 +34,5 @@ that winget updates, belongs with Microsoft or that app's publisher.
 ## What is not in scope
 
 - Support for a modified build, or for a build from a fork.
-- Support for Windows 10: Raikasa runs on Windows 10 version 1809 or later, but it has only been tested on
-  Windows 11.
+- Support for Windows 10: it is built and tested for Windows 11.
 - Response-time guarantees. This is a project maintained by one person, with no support contract and no paid tier.

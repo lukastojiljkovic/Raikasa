@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD041 -->
 ## What this changes
 
 <!-- What does this pull request change, and why? Link the issue it closes, if any. -->

@@ -2,6 +2,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
+<!-- markdownlint-disable-next-line MD022 -->
 ## Platform
 windows
 
@@ -27,8 +28,7 @@ an AI assistant with personal details hidden.
 
 ## Operating Context
 
-- Windows 11 is the tested target (Windows 11 Pro 25H2, build 26200). It also runs on Windows 10 version 1809 or
-  later, x64, but Windows 10 has not been tested.
+- Windows 11, x64 is the target, tested on Windows 11 Pro 25H2 (build 26200).
 - Administrator tools run in an elevated helper that starts on the first such step and lasts for the session.
 - Raikasa works on a PC with no network except for the tools that need one: Windows Update, System image repair,
   Defender definitions, time sync, App updates (winget) and the update check.

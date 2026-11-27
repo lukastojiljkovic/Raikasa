@@ -100,7 +100,7 @@ src/Raikasa.Core          All logic, no UI: catalog, tools, process runner, pars
 src/Raikasa               WinUI 3 app. The same executable hosts the elevated worker (--worker) and the
                              reminder (--reminder).
 tests/Raikasa.Core.Tests  xUnit v3
-installer/Raikasa.iss     Inno Setup 6
+installer/Raikasa.iss     Inno Setup 7.1.1
 ```
 
 ### Process model
@@ -283,12 +283,27 @@ per-user link that starts Raikasa without arguments. A second start hands over t
 ## Build, CI/CD and release
 
 - .NET 10 (`net10.0-windows10.0.26100.0`), Windows App SDK 2.x (WinUI 3), unpackaged and self-contained, x64.
-- `build.ps1`: test → publish (ReadyToRun) → collect third-party licenses → Inno Setup installer.
-- GitHub Actions:
+- `build.ps1`: test → publish (ReadyToRun) → collect third-party licenses → Inno Setup installer. The installer is
+  compiled with Inno Setup 7.1.1 from the vendor's own download; `build.ps1` stops on any other version.
+- Restores are reproducible: every project has a `packages.lock.json`, and CI restores in locked mode. NuGet audit
+  warnings are errors in CI.
+- GitHub Actions (every action is pinned by its full commit SHA; the workflows read the product name from
+  `Directory.Build.props`):
   - **CI** on pushes and pull requests: format check, a check that the previous name appears only where
-    `.github/scripts/old-name-allow-list.txt` allows it, tests, build and installer artifact, and an install and
-    uninstall smoke test of the installer.
-  - **Release** on `v*` tags: checks that the tag matches the version, builds, publishes the installer with its SHA-256
-    and build provenance attestation, and uses the matching `CHANGELOG.md` section as release notes.
-  - **CodeQL** for C# and workflows; **Dependabot** for NuGet and Actions.
+    `.github/scripts/old-name-allow-list.txt` allows it, tests, the embedded PowerShell scripts (Pester and
+    PSScriptAnalyzer), the NuGet vulnerability audit, the dependency licence and notice check, a mutation gate on the
+    changed files (pull requests only), a red-to-green check of new tests (pull requests only), a build of the fuzz
+    targets with a replay of their corpus, the installer build with an install and uninstall smoke test, and the unit
+    tests again as a standard user. One job, **CI gate**, summarises them for the branch ruleset.
+  - **Nightly** runs CI again, a longer fuzz run, the mutation ratchet (which only moves up), a check that the
+    bundled .NET runtime is the newest patch and a link check.
+  - **Security**: gitleaks, osv-scanner, Semgrep, actionlint and zizmor, on pushes and weekly. **CodeQL** covers C# and
+    the workflows. **Dependency review** and the pull-request policy (commit messages, changelog, documentation
+    checks) run on pull requests. **Scorecard** runs weekly.
+  - **Release** on `v*` tags: checks that the tag matches the version, sits on `main` and passed CI; builds with a
+    read-only token and a gate that the bundled .NET runtime is the newest patch of its channel; then, in the
+    `release` environment, attests build provenance and the SBOM (CycloneDX), creates a draft release with the
+    installer, its SHA-256 and the SBOM, and publishes it. The matching `CHANGELOG.md` section is the release notes.
+  - **Dependabot** for NuGet, the .NET SDK, Actions and the CI tools, with a cooldown. WinUI and Windows App SDK
+    packages move only on patch updates.
 - Legal: MIT `LICENSE`, `TERMS.md` (shown by the installer), `PRIVACY.md`, `THIRD-PARTY-NOTICES.md`, `SECURITY.md`.
