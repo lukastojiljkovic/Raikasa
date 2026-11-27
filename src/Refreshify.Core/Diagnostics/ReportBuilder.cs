@@ -9,7 +9,7 @@ namespace Refreshify.Core.Diagnostics;
 public static class ReportBuilder
 {
     private const string Request =
-        "I ran Refreshify, a Windows maintenance app that runs the built-in Windows tools, and one step failed. " +
+        $"I ran {ProductInfo.Name}, a Windows maintenance app that runs the built-in Windows tools, and one step failed. " +
         "Please help me fix it step by step: tell me which commands to run, whether they need a terminal opened as " +
         "administrator, and what to look for in their output.";
 
@@ -19,12 +19,12 @@ public static class ReportBuilder
         var result = step.Result;
         var text = new StringBuilder();
 
-        text.AppendLine("# Refreshify troubleshooting report").AppendLine().AppendLine(Request).AppendLine();
+        text.AppendLine($"# {ProductInfo.Name} troubleshooting report").AppendLine().AppendLine(Request).AppendLine();
 
         text.AppendLine("## System").AppendLine();
         text.AppendLine($"- Windows: {system.Edition}, version {system.Version} (build {system.Build}), {system.Architecture}");
         text.AppendLine($"- Display language: {system.DisplayLanguage}");
-        text.AppendLine($"- Refreshify: {system.AppVersion}").AppendLine();
+        text.AppendLine($"- {ProductInfo.Name}: {system.AppVersion}").AppendLine();
 
         text.AppendLine("## Run").AppendLine();
         text.AppendLine(CultureInfo.InvariantCulture, $"Started {run.Started.ToLocalTime():yyyy-MM-dd HH:mm} ({Describe(run.Kind)}).").AppendLine();

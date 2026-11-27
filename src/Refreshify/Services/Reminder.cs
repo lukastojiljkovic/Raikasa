@@ -17,12 +17,12 @@ namespace Refreshify.Services;
 /// </summary>
 internal static class Reminder
 {
-    private const string AppId = "LukaStojiljkovic.Refreshify";
+    private const string AppId = ProductInfo.AppUserModelId;
     private const string AppIdKeyPath = @"Software\Classes\AppUserModelId\" + AppId;
-    private const string ProtocolKeyPath = @"Software\Classes\refreshify";
+    private const string ProtocolKeyPath = @"Software\Classes\" + ProductInfo.Scheme;
 
     // Every user on a PC shares the task namespace, so each user's task carries their SID.
-    private static readonly string TaskName = $"Refreshify reminder-{WindowsIdentity.GetCurrent().User}";
+    private static readonly string TaskName = $"{ProductInfo.TaskNamePrefix}{WindowsIdentity.GetCurrent().User}";
 
     /// <summary>Creates the daily task when the reminder is on, and removes it when it's off.</summary>
     /// <returns><see langword="false"/> if Task Scheduler didn't accept the task.</returns>
@@ -35,7 +35,7 @@ internal static class Reminder
             return true;
         }
 
-        var xml = Path.Combine(Path.GetTempPath(), $"refreshify-reminder-{Guid.NewGuid():N}.xml");
+        var xml = Path.Combine(Path.GetTempPath(), $"{ProductInfo.Id}-reminder-{Guid.NewGuid():N}.xml");
         await File.WriteAllTextAsync(xml, TaskXml(), Encoding.Unicode);
         try
         {
@@ -58,7 +58,7 @@ internal static class Reminder
         var last = AppSettings.LastFullRefresh is { } time ? $"Your last full refresh was on {RunModel.When(time)}. " : string.Empty;
         var toast = new XmlDocument();
         toast.LoadXml($"""
-            <toast activationType="protocol" launch="refreshify:">
+            <toast activationType="protocol" launch="{ProductInfo.Scheme}:">
               <visual>
                 <binding template="ToastGeneric">
                   <text>Time to refresh Windows</text>
@@ -84,12 +84,12 @@ internal static class Reminder
     {
         using (var app = Registry.CurrentUser.CreateSubKey(AppIdKeyPath))
         {
-            app.SetValue("DisplayName", "Refreshify");
+            app.SetValue("DisplayName", ProductInfo.Name);
             app.SetValue("IconUri", Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.png"));
         }
 
         using var protocol = Registry.CurrentUser.CreateSubKey(ProtocolKeyPath);
-        protocol.SetValue(null, "URL:Refreshify");
+        protocol.SetValue(null, $"URL:{ProductInfo.Name}");
         protocol.SetValue("URL Protocol", string.Empty);
         using var command = protocol.CreateSubKey(@"shell\open\command");
         command.SetValue(null, $"\"{Environment.ProcessPath}\"");
@@ -103,8 +103,8 @@ internal static class Reminder
         <?xml version="1.0" encoding="UTF-16"?>
         <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
           <RegistrationInfo>
-            <Author>Refreshify</Author>
-            <Description>Reminds you to refresh Windows. Turn it off in Refreshify's settings.</Description>
+            <Author>{ProductInfo.Name}</Author>
+            <Description>Reminds you to refresh Windows. Turn it off in {ProductInfo.Name}'s settings.</Description>
           </RegistrationInfo>
           <Triggers>
             <CalendarTrigger>

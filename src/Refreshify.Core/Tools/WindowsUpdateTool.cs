@@ -13,11 +13,11 @@ public sealed class WindowsUpdateTool(ToolInfo info) : Tool(info)
     public override async Task<ToolResult> RunAsync(ToolContext context, CancellationToken cancellationToken)
     {
         context.Status("Checking for updates");
-        var stopFile = Path.Combine(Path.GetTempPath(), $"refreshify-{Guid.NewGuid():N}.stop");
+        var stopFile = Path.Combine(Path.GetTempPath(), $"{ProductInfo.Id}-{Guid.NewGuid():N}.stop");
         try
         {
             await using var stop = cancellationToken.Register(() => RequestStop(stopFile));
-            var script = PowerShell.Script("WindowsUpdate", new Dictionary<string, string> { ["StopFile"] = stopFile });
+            var script = PowerShell.Script("WindowsUpdate", new Dictionary<string, string> { ["StopFile"] = stopFile, ["ClientId"] = ProductInfo.Name });
             var result = await context.RunAsync(script, line => ReportProgress(context, line), CancellationToken.None);
             return ScriptTool.Evaluate(result, Interpret, KnownIssues.FromWindowsUpdate);
         }

@@ -1,7 +1,7 @@
 # Installs the available Windows updates one at a time through the Windows Update Agent API. Optional updates
 # (BrowseOnly) and updates that need user input are left for Settings. Creating $StopFile stops the run between updates,
 # so an update is never interrupted halfway.
-# Parameters: $StopFile
+# Parameters: $StopFile, $ClientId (the product name, which Windows Update records as the client)
 
 # The update's own error, or the operation's when the update has none.
 function Get-HResult($result) {
@@ -10,7 +10,7 @@ function Get-HResult($result) {
 }
 
 $session = New-Object -ComObject Microsoft.Update.Session
-$session.ClientApplicationID = 'Refreshify'
+$session.ClientApplicationID = $ClientId
 
 Emit @{ phase = 'searching' }
 $search = $session.CreateUpdateSearcher().Search('IsInstalled=0 and IsHidden=0 and BrowseOnly=0')

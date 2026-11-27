@@ -44,7 +44,7 @@ public sealed partial class SystemHealthReaders : IHealthReaders
 
     public async Task<BatteryReading?> ReadBatteryAsync(CancellationToken cancellationToken)
     {
-        var path = Path.Combine(Path.GetTempPath(), $"refreshify-battery-{Guid.NewGuid():N}.xml");
+        var path = Path.Combine(Path.GetTempPath(), $"{ProductInfo.Id}-battery-{Guid.NewGuid():N}.xml");
         try
         {
             var spec = ProcessSpec.System32("powercfg.exe", $"/batteryreport /xml /output \"{path}\"");

@@ -11,7 +11,7 @@ namespace Refreshify.Services;
 /// </summary>
 internal static class AppSettings
 {
-    private const string KeyPath = @"Software\Refreshify";
+    private const string KeyPath = @"Software\" + ProductInfo.RegistryKeyName;
     private const string ToolsKeyPath = KeyPath + @"\Tools";
 
     /// <summary>The reminder intervals Settings offers, in months. Zero turns the reminder off.</summary>

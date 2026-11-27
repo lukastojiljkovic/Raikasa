@@ -28,7 +28,7 @@ public static class PowerShell
     /// <summary>Runs one of the scripts embedded from <c>Scripts\*.ps1</c>.</summary>
     public static ProcessSpec Script(string name, IReadOnlyDictionary<string, string>? parameters = null)
     {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Refreshify.Scripts.{name}.ps1")
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"{ProductInfo.Name}.Scripts.{name}.ps1")
             ?? throw new ArgumentException($"There's no embedded script named {name}.", nameof(name));
         using var reader = new StreamReader(stream);
         return Inline(reader.ReadToEnd(), $"powershell.exe {name}.ps1", parameters);

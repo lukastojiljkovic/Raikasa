@@ -2,11 +2,13 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>$(ProductName).Core</AssemblyName>
+    <RootNamespace>$(ProductName).Core</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Scripts\*.ps1" LogicalName="Refreshify.Scripts.%(Filename).ps1" />
+    <EmbeddedResource Include="Scripts\*.ps1" LogicalName="$(ProductName).Scripts.%(Filename).ps1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -14,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Refreshify.Core.Tests" />
+    <InternalsVisibleTo Include="$(ProductName).Core.Tests" />
   </ItemGroup>
 
 </Project>

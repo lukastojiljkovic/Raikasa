@@ -5,7 +5,7 @@ namespace Refreshify.Core.Tests.Platform;
 
 public class ScriptsTests
 {
-    private const string ResourcePrefix = "Refreshify.Scripts.";
+    private const string ResourcePrefix = ProductInfo.Name + ".Scripts.";
 
     public static TheoryData<string> Scripts => [.. typeof(Tool).Assembly.GetManifestResourceNames()
         .Where(name => name.StartsWith(ResourcePrefix, StringComparison.Ordinal))

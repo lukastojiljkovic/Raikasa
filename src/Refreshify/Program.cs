@@ -26,7 +26,7 @@ public static partial class Program
         }
 
         // One window: a second start hands its activation to the first, which comes to the front.
-        var instance = AppInstance.FindOrRegisterForKey("Refreshify");
+        var instance = AppInstance.FindOrRegisterForKey(ProductInfo.Name);
         if (!instance.IsCurrent)
         {
             AllowSetForegroundWindow(instance.ProcessId);

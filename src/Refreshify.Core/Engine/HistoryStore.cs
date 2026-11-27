@@ -7,7 +7,7 @@ namespace Refreshify.Core.Engine;
 public sealed class HistoryStore(string directory, int capacity = 50)
 {
     public static string DefaultDirectory { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Refreshify", "History");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), ProductInfo.DataFolderName, "History");
 
     public void Save(RunRecord run)
     {

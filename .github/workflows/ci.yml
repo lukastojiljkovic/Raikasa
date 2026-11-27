@@ -44,24 +44,25 @@ jobs:
       - name: Install and uninstall silently
         run: |
           $setup = (Get-ChildItem artifacts\installer\*.exe).FullName
-          $app = "$env:ProgramFiles\Refreshify"
+          $name = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.ProductName
+          $app = "$env:ProgramFiles\$name"
           $install = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
           if ($install.ExitCode) { throw "Setup failed with exit code $($install.ExitCode)." }
-          foreach ($file in 'Refreshify.exe', 'LICENSE.txt', 'TERMS.md', 'PRIVACY.md', 'THIRD-PARTY-NOTICES.md', 'licenses') {
+          foreach ($file in "$name.exe", 'LICENSE.txt', 'TERMS.md', 'PRIVACY.md', 'THIRD-PARTY-NOTICES.md', 'licenses') {
             if (-not (Test-Path "$app\$file")) { throw "Setup didn't install $file." }
           }
           if (-not (Get-ChildItem "$app\licenses")) { throw 'The licenses folder is empty.' }
           Write-Host "Installed $((Get-ChildItem $app -Recurse -File).Count) files."
 
           # Settings and history for the uninstaller to remove.
-          New-Item -Force HKCU:\Software\Refreshify | New-ItemProperty -Name ShowWelcome -Value 0 -PropertyType DWord | Out-Null
-          New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\Refreshify\History" | Out-Null
+          New-Item -Force "HKCU:\Software\$name" | New-ItemProperty -Name ShowWelcome -Value 0 -PropertyType DWord | Out-Null
+          New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\$name\History" | Out-Null
 
           # The uninstaller hands over to a copy of itself and returns right away, so wait for the app folder to go.
           Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
           $deadline = (Get-Date).AddMinutes(2)
           while ((Test-Path $app) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
           if (Test-Path $app) { throw "The uninstaller left $app behind." }
-          if (Test-Path HKCU:\Software\Refreshify) { throw 'The uninstaller left the settings behind.' }
-          if (Test-Path "$env:LOCALAPPDATA\Refreshify") { throw 'The uninstaller left the history behind.' }
+          if (Test-Path "HKCU:\Software\$name") { throw 'The uninstaller left the settings behind.' }
+          if (Test-Path "$env:LOCALAPPDATA\$name") { throw 'The uninstaller left the history behind.' }
           Write-Host 'Uninstalled cleanly.'
