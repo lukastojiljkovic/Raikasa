@@ -26,6 +26,9 @@ dotnet format Refreshify.slnx --verify-no-changes           # the CI lint step
 ## Rules
 
 - English only: code, UI text, docs, commits.
+- The product name is spelled once in `Directory.Build.props` (`ProductName`, which the project names, the installer and
+  `build.ps1` follow) and once in C# (`src/Refreshify.Core/ProductInfo.cs`, which every runtime id uses). XAML text and
+  the documents keep the literal name.
 - Never show invented numbers. Only measured values (bytes deleted, updates installed) reach the UI or docs.
 - Detection must not depend on localized console text: use exit codes, HRESULTs, `DISM /English`, `CBS.log`, and
   JSON emitted by the PowerShell scripts.

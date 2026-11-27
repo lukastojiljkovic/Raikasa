@@ -117,7 +117,7 @@ public sealed partial class MainWindow : Window
         if (Runs.IsBusy)
         {
             ShowRun();
-            ShowStatus(InfoBarSeverity.Warning, "Refreshify is already running", "Wait for the current run to finish, or cancel it.");
+            ShowStatus(InfoBarSeverity.Warning, $"{ProductInfo.Name} is already running", "Wait for the current run to finish, or cancel it.");
             return;
         }
 
@@ -163,7 +163,7 @@ public sealed partial class MainWindow : Window
     {
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
-        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Refreshify.ico"));
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", $"{ProductInfo.Name}.ico"));
         AppWindow.Closing += OnWindowClosing;
         Closed += async (_, _) => await Runs.DisposeAsync();
 
@@ -241,8 +241,8 @@ public sealed partial class MainWindow : Window
 
         args.Cancel = true;
         if (_closeAfterRun || !await Dialogs.ConfirmAsync(
-            "Stop the run and close Refreshify?",
-            "Refreshify stops after the current step. Steps that must not be interrupted, such as System file check, finish first.",
+            $"Stop the run and close {ProductInfo.Name}?",
+            $"{ProductInfo.Name} stops after the current step. Steps that must not be interrupted, such as System file check, finish first.",
             "Stop and close"))
         {
             return;
@@ -250,7 +250,7 @@ public sealed partial class MainWindow : Window
 
         _closeAfterRun = true;
         Runs.Cancel();
-        ShowStatus(InfoBarSeverity.Informational, "Closing after the current step", "Refreshify closes when the current step finishes.");
+        ShowStatus(InfoBarSeverity.Informational, "Closing after the current step", $"{ProductInfo.Name} closes when the current step finishes.");
     }
 
     private void OnRunFinished(object? sender, EventArgs e)
@@ -270,8 +270,8 @@ public sealed partial class MainWindow : Window
     internal void ShowUpdateAvailable(ReleaseInfo release)
     {
         _availableRelease = release;
-        UpdateBar.Title = $"Refreshify {release.Version.ToString(3)} is available";
-        UpdateBar.Message = $"You have Refreshify {Updates.CurrentVersion.ToString(3)}.";
+        UpdateBar.Title = $"{ProductInfo.Name} {release.Version.ToString(3)} is available";
+        UpdateBar.Message = $"You have {ProductInfo.Name} {Updates.CurrentVersion.ToString(3)}.";
         UpdateBar.IsOpen = true;
         RefreshUpdateActions();
     }
@@ -306,7 +306,7 @@ public sealed partial class MainWindow : Window
 #if DEBUG
         // Forces the notes for the real version to be shown, since the test
         // version override changes only what the check compares against.
-        if (Environment.GetEnvironmentVariable("REFRESHIFY_SHOW_UPDATED_NOTES") == "1")
+        if (Environment.GetEnvironmentVariable(ProductInfo.EnvironmentPrefix + "SHOW_UPDATED_NOTES") == "1")
             return notes;
 #endif
         if (!ranBefore)
@@ -347,7 +347,7 @@ public sealed partial class MainWindow : Window
     {
         if (Runs.IsBusy)
         {
-            ShowStatus(InfoBarSeverity.Warning, "Refreshify is busy", "Wait for the current run to finish before updating.");
+            ShowStatus(InfoBarSeverity.Warning, $"{ProductInfo.Name} is busy", "Wait for the current run to finish before updating.");
             return;
         }
         if (_updateDownload is not null)
@@ -362,8 +362,8 @@ public sealed partial class MainWindow : Window
         var cancel = new Button { Content = "Cancel" };
         cancel.Click += (_, _) => cancellation.Cancel();
         StatusBar.Severity = InfoBarSeverity.Informational;
-        StatusBar.Title = $"Downloading Refreshify {release.Version.ToString(3)}\u2026";
-        StatusBar.Message = "Refreshify verifies the installer before it runs it.";
+        StatusBar.Title = $"Downloading {ProductInfo.Name} {release.Version.ToString(3)}\u2026";
+        StatusBar.Message = $"{ProductInfo.Name} verifies the installer before it runs it.";
         StatusBar.Content = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -388,7 +388,7 @@ public sealed partial class MainWindow : Window
         }
         catch (OperationCanceledException)
         {
-            ShowStatus(InfoBarSeverity.Informational, "Update cancelled", "Refreshify is unchanged.");
+            ShowStatus(InfoBarSeverity.Informational, "Update cancelled", $"{ProductInfo.Name} is unchanged.");
             return;
         }
         finally

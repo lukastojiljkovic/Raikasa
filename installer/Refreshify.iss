@@ -1,13 +1,16 @@
-; Inno Setup script for Refreshify. Built by build.ps1 from the self-contained publish output.
+; Inno Setup script for Refreshify. Built by build.ps1 from the self-contained publish output. build.ps1 passes the product
+; name from Directory.Build.props as /DAppName, so the name below is only the default for a direct ISCC run.
 
 #ifndef AppVersion
   #define AppVersion "2.0.0"
 #endif
 
-#define AppName "Refreshify"
-#define AppExeName "Refreshify.exe"
+#ifndef AppName
+  #define AppName "Refreshify"
+#endif
+#define AppExeName AppName + ".exe"
 #define AppPublisher "Luka Stojiljkovic"
-#define AppUrl "https://github.com/lukastojiljkovic/Refreshify"
+#define AppUrl "https://github.com/lukastojiljkovic/" + AppName
 #define PublishDir "..\artifacts\publish\win-x64"
 
 [Setup]
@@ -27,7 +30,7 @@ DisableProgramGroupPage=yes
 LicenseFile=..\TERMS.md
 OutputDir=..\artifacts\installer
 OutputBaseFilename={#AppName}-{#AppVersion}-Setup
-SetupIconFile=..\src\Refreshify\Assets\Refreshify.ico
+SetupIconFile=..\src\{#AppName}\Assets\{#AppName}.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName}
 WizardStyle=modern

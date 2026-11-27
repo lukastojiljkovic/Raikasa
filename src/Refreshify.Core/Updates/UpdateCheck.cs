@@ -53,7 +53,7 @@ public sealed class UpdateChecker
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, ReleaseReader.ApiLatestUrl);
-            request.Headers.TryAddWithoutValidation("User-Agent", $"Refreshify/{_currentVersion.ToString(3)}");
+            request.Headers.TryAddWithoutValidation("User-Agent", $"{ProductInfo.UserAgentProduct}/{_currentVersion.ToString(3)}");
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             request.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
 

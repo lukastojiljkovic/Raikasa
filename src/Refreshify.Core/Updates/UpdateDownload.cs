@@ -29,7 +29,7 @@ public sealed class UpdateDownloader
 
     /// <summary>Per-user, so a non-admin process cannot swap the file between the two hash checks.</summary>
     internal static string DefaultUpdatesDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Refreshify", "Updates");
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), ProductInfo.DataFolderName, "Updates");
 
     private static readonly TimeSpan SidecarTimeout = TimeSpan.FromSeconds(10);
 
@@ -49,7 +49,7 @@ public sealed class UpdateDownloader
         IProgress<UpdateProgress>? progress = null)
     {
         Directory.CreateDirectory(_directory);
-        var fileName = release.InstallerName ?? $"Refreshify-{release.Version.ToString(3)}-Setup.exe";
+        var fileName = release.InstallerName ?? $"{ProductInfo.AssetPrefix}-{release.Version.ToString(3)}-Setup.exe";
         var target = Path.Combine(_directory, fileName);
         RemoveOtherFiles(target);
 

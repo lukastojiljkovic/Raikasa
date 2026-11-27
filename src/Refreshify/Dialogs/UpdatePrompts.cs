@@ -9,7 +9,7 @@ namespace Refreshify.Dialogs;
 internal static class UpdatePrompts
 {
     /// <summary>The release tag page, for a version the CHANGELOG describes but the app did not fetch.</summary>
-    private const string ReleaseTagUrl = "https://github.com/lukastojiljkovic/Refreshify/releases/tag/v";
+    private const string ReleaseTagUrl = ProductInfo.RepositoryUrl + "/releases/tag/v";
 
     /// <summary>
     /// Shows a release's notes before updating, with the release page as the
@@ -20,7 +20,7 @@ internal static class UpdatePrompts
     {
         var dialog = new ContentDialog
         {
-            Title = $"What's new in Refreshify {release.Version.ToString(3)}",
+            Title = $"What's new in {ProductInfo.Name} {release.Version.ToString(3)}",
             Content = NotesContent(release.PublishedAt, ReleaseNotes.FromReleaseBody(release.Body), release.PageUrl),
             PrimaryButtonText = "Update now",
             IsPrimaryButtonEnabled = canUpdate,
@@ -36,7 +36,7 @@ internal static class UpdatePrompts
     {
         var dialog = new ContentDialog
         {
-            Title = $"Refreshify was updated to {version.ToString(3)}",
+            Title = $"{ProductInfo.Name} was updated to {version.ToString(3)}",
             Content = NotesContent(null, notes, ReleaseTagUrl + version.ToString(3)),
             CloseButtonText = "Got it",
         };

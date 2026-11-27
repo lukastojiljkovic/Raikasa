@@ -34,7 +34,7 @@ internal sealed class RunCoordinator : IRunObserver, IAsyncDisposable
     public event EventHandler? Finished;
 
     public static string DataDirectory { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Refreshify");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), ProductInfo.DataFolderName);
 
     public static string LogDirectory { get; } = Path.Combine(DataDirectory, "Logs");
 

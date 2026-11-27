@@ -127,7 +127,7 @@ public sealed class UpdateService
     private static Version CurrentVersionWithDebugOverride(Version version)
     {
 #if DEBUG
-        var raw = Environment.GetEnvironmentVariable("REFRESHIFY_UPDATE_TEST_VERSION");
+        var raw = Environment.GetEnvironmentVariable(ProductInfo.EnvironmentPrefix + "UPDATE_TEST_VERSION");
         if (!string.IsNullOrWhiteSpace(raw) && UpdateVersion.TryParsePlain(raw, out var parsed))
             return parsed;
 #endif

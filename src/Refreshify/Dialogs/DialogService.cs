@@ -56,7 +56,7 @@ internal sealed class DialogService(FrameworkElement root)
         if (tools.Count < plan.Count)
             Add(Glyphs.RestorePoint, "A restore point is created first, so you can undo the changes with System Restore.");
         if (tools.Any(tool => tool.Info.RunAs == RunAs.Administrator))
-            Add(Glyphs.Administrator, "Windows asks you to let Refreshify make changes, once per session.");
+            Add(Glyphs.Administrator, $"Windows asks you to let {ProductInfo.Name} make changes, once per session.");
         if (Any(ToolTraits.RestartsExplorer))
             Add(Glyphs.Explorer, "File Explorer restarts, so its windows close for a moment.");
         if (Any(ToolTraits.MayCloseApps))
@@ -64,7 +64,7 @@ internal sealed class DialogService(FrameworkElement root)
         if (Any(ToolTraits.LongRunning))
             Add(Glyphs.Time, "Some tools take a while. You can keep using your PC in the meantime.");
         if (Any(ToolTraits.RestartRequired))
-            Add(Glyphs.Restart, "Some changes finish after a restart. Refreshify never restarts your PC without asking.");
+            Add(Glyphs.Restart, $"Some changes finish after a restart. {ProductInfo.Name} never restarts your PC without asking.");
 
         var name = RunModel.TitleOf(new RunRecord(string.Empty, request.Kind, DateTimeOffset.Now,
             [.. plan.Select(tool => new StepRecord(tool.Info.Id, tool.Info.Name))]));
@@ -141,7 +141,7 @@ internal sealed class DialogService(FrameworkElement root)
                 Spacing = 12,
                 Children =
                 {
-                    Paragraph("Refreshify can't fix this on its own. Copy this report and paste it into an AI assistant, such as Copilot, ChatGPT or Claude. It describes your PC and what went wrong, so the assistant can help you step by step. Refreshify doesn't send it anywhere."),
+                    Paragraph($"{ProductInfo.Name} can't fix this on its own. Copy this report and paste it into an AI assistant, such as Copilot, ChatGPT or Claude. It describes your PC and what went wrong, so the assistant can help you step by step. {ProductInfo.Name} doesn't send it anywhere."),
                     report,
                     hide,
                 },

@@ -28,7 +28,7 @@ public sealed class WorkerHost(Func<string, Tool?> findTool, IToolExecutor execu
         }
 
         if (PipePeer.ServerProcessId(pipe) != uiProcessId)
-            throw new UnauthorizedAccessException("The pipe doesn't belong to the Refreshify window that started this helper.");
+            throw new UnauthorizedAccessException($"The pipe doesn't belong to the {ProductInfo.Name} window that started this helper.");
 
         var peer = new PipePeer(pipe);
         var running = Task.CompletedTask;

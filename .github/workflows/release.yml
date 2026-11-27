@@ -29,6 +29,7 @@ jobs:
           $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
           if ("v$version" -cne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME doesn't match version $version in Directory.Build.props." }
           "version=$version" >> $env:GITHUB_OUTPUT
+          "name=$(([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.ProductName)" >> $env:GITHUB_OUTPUT
 
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
@@ -75,6 +76,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
+          PRODUCT: ${{ steps.version.outputs.name }}
         run: |
           $setup = Get-Item artifacts\installer\*.exe
-          gh release create $env:GITHUB_REF_NAME $setup.FullName "$($setup.FullName).sha256" --title "Refreshify $env:VERSION" --notes-file release-notes.md --verify-tag
+          gh release create $env:GITHUB_REF_NAME $setup.FullName "$($setup.FullName).sha256" --title "$env:PRODUCT $env:VERSION" --notes-file release-notes.md --verify-tag

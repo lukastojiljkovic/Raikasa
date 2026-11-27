@@ -32,7 +32,7 @@ public static class ToolCatalog
                 "Creates a restore point before anything changes, so you can undo the changes with System Restore.",
                 "Checkpoint-Computer, skipped when a restore point from the last 24 hours exists", RunAs.Administrator, Hidden: true),
             "Creating a restore point",
-            _ => PowerShell.Script("RestorePoint", new Dictionary<string, string> { ["Description"] = "Refreshify" }),
+            _ => PowerShell.Script("RestorePoint", new Dictionary<string, string> { ["Description"] = ProductInfo.Name }),
             messages => State(messages) switch
             {
                 "created" => ToolResult.Succeeded("Created a restore point."),

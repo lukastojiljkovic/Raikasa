@@ -46,7 +46,7 @@ public sealed class WorkerClient(Func<string, int> launch) : IToolExecutor, IAsy
                     return result.Result;
             }
 
-            throw new IOException("Refreshify's administrator helper stopped unexpectedly.");
+            throw new IOException($"{ProductInfo.Name}'s administrator helper stopped unexpectedly.");
         }
         catch (IOException)
         {
@@ -74,7 +74,7 @@ public sealed class WorkerClient(Func<string, int> launch) : IToolExecutor, IAsy
             UseShellExecute = true,
             Verb = "runas",
             WindowStyle = ProcessWindowStyle.Hidden,
-        }) ?? throw new InvalidOperationException("Refreshify's administrator helper didn't start.");
+        }) ?? throw new InvalidOperationException($"{ProductInfo.Name}'s administrator helper didn't start.");
         return process.Id;
     }
 
@@ -84,7 +84,7 @@ public sealed class WorkerClient(Func<string, int> launch) : IToolExecutor, IAsy
             return _peer;
 
         Disconnect();
-        var name = $"Refreshify-{Guid.NewGuid():N}";
+        var name = $"{ProductInfo.Name}-{Guid.NewGuid():N}";
         var pipe = NamedPipeServerStreamAcl.Create(
             name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 0, 0, Security());
         try
@@ -107,11 +107,11 @@ public sealed class WorkerClient(Func<string, int> launch) : IToolExecutor, IAsy
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                throw new TimeoutException("Refreshify's administrator helper didn't start in time.");
+                throw new TimeoutException($"{ProductInfo.Name}'s administrator helper didn't start in time.");
             }
 
             if (PipePeer.ClientProcessId(pipe) != expected)
-                throw new UnauthorizedAccessException("An unexpected process connected to Refreshify's administrator helper.");
+                throw new UnauthorizedAccessException($"An unexpected process connected to {ProductInfo.Name}'s administrator helper.");
 
             _pipe = pipe;
             _peer = new PipePeer(pipe);

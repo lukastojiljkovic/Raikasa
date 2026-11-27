@@ -176,7 +176,7 @@ public sealed partial class DiskSpaceView : UserControl
             return;
         if (SpaceScanner.UnseenBytes(drive.TotalSize - drive.AvailableFreeSpace, result.Root.Size) is not { } unseen)
             return;
-        UnseenText.Text = $"Files Refreshify could not see, such as other users' files and system files, take {Format.Bytes(unseen)}.";
+        UnseenText.Text = $"Files {ProductInfo.Name} could not see, such as other users' files and system files, take {Format.Bytes(unseen)}.";
         UnseenText.Visibility = Visibility.Visible;
     }
 

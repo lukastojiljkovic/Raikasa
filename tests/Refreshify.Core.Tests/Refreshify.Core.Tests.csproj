@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>$(ProductName).Core.Tests</AssemblyName>
+    <RootNamespace>$(ProductName).Core.Tests</RootNamespace>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
@@ -13,7 +15,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <ProjectReference Include="..\..\src\Refreshify.Core\Refreshify.Core.csproj" />
+    <ProjectReference Include="..\..\src\$(ProductName).Core\$(ProductName).Core.csproj" />
   </ItemGroup>
 
 </Project>

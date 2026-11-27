@@ -25,11 +25,11 @@ public sealed record ReleaseInfo(
 /// <summary>Reads the release JSON. Internal: the checker owns the network.</summary>
 internal static class ReleaseReader
 {
-    internal const string Owner = "lukastojiljkovic";
-    internal const string Repository = "Refreshify";
-    internal const string RepositoryUrl = "https://github.com/" + Owner + "/" + Repository;
+    internal const string Owner = ProductInfo.RepositoryOwner;
+    internal const string Repository = ProductInfo.RepositoryName;
+    internal const string RepositoryUrl = ProductInfo.RepositoryUrl;
     internal const string ReleasePageUrl = RepositoryUrl + "/releases/latest";
-    internal const string AssetPrefix = "Refreshify";
+    internal const string AssetPrefix = ProductInfo.AssetPrefix;
     internal const string ApiLatestUrl =
         "https://api.github.com/repos/" + Owner + "/" + Repository + "/releases/latest";
 
