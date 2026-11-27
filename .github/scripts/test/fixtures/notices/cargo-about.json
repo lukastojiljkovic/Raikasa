@@ -1,0 +1,128 @@
+{
+  "overview": [],
+  "crates": [
+    {
+      "package": {
+        "name": "b-crate",
+        "version": "0.4.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "repository": "https://example.invalid/b-crate",
+        "license": "MIT OR LGPL-2.1-only",
+        "manifest_path": "registry/b-crate-0.4.0/Cargo.toml"
+      },
+      "license": "MIT OR LGPL-2.1-only"
+    },
+    {
+      "package": {
+        "name": "c-crate",
+        "version": "3.1.0",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "repository": null,
+        "license": "Unlicense",
+        "manifest_path": "registry/c-crate-3.1.0/Cargo.toml"
+      },
+      "license": "Unlicense"
+    },
+    {
+      "package": {
+        "name": "a-crate",
+        "version": "1.2.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "repository": "https://example.invalid/a-crate",
+        "license": "MIT OR Apache-2.0",
+        "manifest_path": "registry/a-crate-1.2.3/Cargo.toml"
+      },
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "package": {
+        "name": "d-crate",
+        "version": "2.0.0",
+        "authors": [
+          "D Author <d@example.invalid>"
+        ],
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "repository": "https://example.invalid/d-crate",
+        "license": "MIT",
+        "manifest_path": "registry/d-crate-2.0.0/Cargo.toml"
+      },
+      "license": "MIT"
+    }
+  ],
+  "licenses": [
+    {
+      "name": "MIT License",
+      "id": "MIT",
+      "source_path": "registry/a-crate-1.2.3/LICENSE-MIT",
+      "first_of_kind": true,
+      "text": "MIT License\n\nCopyright (c) 2024 A Author\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n",
+      "used_by": [
+        {
+          "crate": {
+            "name": "b-crate",
+            "version": "0.4.0"
+          },
+          "path": null
+        },
+        {
+          "crate": {
+            "name": "a-crate",
+            "version": "1.2.3"
+          },
+          "path": null
+        }
+      ]
+    },
+    {
+      "name": "Apache License 2.0",
+      "id": "Apache-2.0",
+      "source_path": "registry/a-crate-1.2.3/LICENSE-APACHE",
+      "first_of_kind": true,
+      "text": "Apache License\r\nVersion 2.0, January 2004 (fixture text, not the real licence)\r\n",
+      "used_by": [
+        {
+          "crate": {
+            "name": "a-crate",
+            "version": "1.2.3"
+          },
+          "path": null
+        }
+      ]
+    },
+    {
+      "name": "The Unlicense",
+      "id": "Unlicense",
+      "source_path": "registry/c-crate-3.1.0/UNLICENSE",
+      "first_of_kind": true,
+      "text": "This is free and unencumbered software released into the public domain (fixture text).\n",
+      "used_by": [
+        {
+          "crate": {
+            "name": "c-crate",
+            "version": "3.1.0"
+          },
+          "path": null
+        }
+      ]
+    },
+    {
+      "name": "MIT License",
+      "id": "MIT",
+      "source_path": null,
+      "first_of_kind": false,
+      "text": "MIT License\n\nCopyright (c) <year> <copyright holders>\n\nPermission is hereby granted to anyone to use this software (SPDX template, fixture text).\n",
+      "used_by": [
+        {
+          "crate": {
+            "name": "d-crate",
+            "version": "2.0.0",
+            "authors": [
+              "D Author <d@example.invalid>"
+            ]
+          },
+          "path": null
+        }
+      ]
+    }
+  ]
+}

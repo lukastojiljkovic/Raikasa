@@ -1,0 +1,21 @@
+# gitleaks configuration for the Security workflow (security.yml).
+# The stock rules are extended, never replaced.
+#
+# An exemption names the reviewed LITERAL it excuses, nothing broader: a path entry
+# exempts every rule inside that path (Nexus proved it by planting a key and watching
+# it vanish). After adding an entry, plant a real-looking key next to it and confirm
+# the scan still fails; record that in the pull request. Check the allowlist syntax
+# against the pinned gitleaks version by that same experiment: Nexus found keys that
+# the documentation listed but its pinned version ignored without a warning.
+
+title = "Secret scan"
+
+[extend]
+useDefault = true
+
+# [allowlist]
+# description = "Reviewed non-secrets, each named by the literal it excuses"
+# regexes = [
+#   # path/to/file: why this value is not a secret.
+#   '''^the-exact-literal$''',
+# ]

@@ -1,0 +1,3 @@
+b-crate third-party notices
+
+Includes code from the Bee Project under the MIT licence.

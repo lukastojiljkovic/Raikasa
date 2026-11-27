@@ -1,0 +1,3 @@
+Fixture platform runtime licence text.
+
+Permission is granted to use it as a fixture.

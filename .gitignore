@@ -5,6 +5,24 @@ artifacts/
 TestResults/
 *.binlog
 
+# Test, mutation and fuzz output
+StrykerOutput/
+fuzz/artifacts/
+fuzz/work/
+fuzz-out/
+*.received.*
+
+# CI tools installed into the working folder by the workflows and by the same steps run locally
+.tools/
+licence-files/
+licences.json
+notices/nuget-license.json
+vulnerable.json
+.github/ci-tools/.venv/
+.github/docs-tools/node_modules/
+# The Microsoft style package that vale sync downloads (pinned in .vale.ini)
+.vale/styles/Microsoft/
+
 # IDE
 .vs/
 .vscode/
@@ -16,5 +34,16 @@ TestResults/
 packages/
 *.nupkg
 
+# Environment and secrets
+.env
+.env.*
+*.pfx
+*.snk
+*.keystore
+*.pem
+
 # Maintainer notes, never published
 /internal/
+
+# Agent-local state
+.claude/

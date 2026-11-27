@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT
+#
+# Python tools that CI runs, pinned with their whole dependency tree and hashes by the uv.lock beside this file, so
+# security.yml runs `uv run --project .github/ci-tools --locked semgrep ...` instead of uvx, which pins only the
+# top-level package. Generate the lock with `uv lock --project .github/ci-tools` and commit it; `--locked` fails the job
+# when the lock is missing or stale. Dependabot's `uv` block for /.github/ci-tools keeps it current, and osv-scanner
+# reads the lock like any other.
+
+[project]
+name = "ci-tools"
+version = "0"
+description = "Pinned CI tools; not a package."
+requires-python = ">=3.12"
+dependencies = [
+  "semgrep==1.184.0",
+]
+
+[tool.uv]
+package = false
+# The cutoff the lock was resolved with: nothing younger than the program's 5-day cooldown (2026-11-27 minus 5 days).
+exclude-newer = "2026-11-22T00:00:00Z"

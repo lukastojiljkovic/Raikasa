@@ -1,3 +1,32 @@
-* text=auto
+# Text is stored and checked out as LF everywhere. Nexus learned what a CRLF
+# checkout breaks: shebang lines, byte-compared fixtures, patches, and generated
+# files that CI compares with what the generator writes.
+* text=auto eol=lf
+
+# cmd.exe needs CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary formats: never normalised, never diffed as text.
 *.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.gif binary
 *.ico binary
+*.icns binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.7z binary
+*.exe binary
+*.dll binary
+*.msix binary
+*.glb binary
+*.ktx2 binary
+notices/dotnet-runtime/*.TXT -text
+fuzz/corpus/** -text

@@ -1,0 +1,14 @@
+# zizmor's configuration, which zizmor finds by itself (.github/zizmor.yml); read by the
+# Security gate's `workflows` job (security.yml) and by a local `zizmor .`. Template:
+# engineering-standard.md, section 4.5.
+#
+# The only setting: the minimum cooldown of zizmor's dependabot-cooldown audit. The audit's
+# default is 7 days and it reports every block with less as medium, while the program's
+# cooldown in dependabot.yml is 5 days (14 for a major; engineering standard 4.4). Setting
+# 5 here keeps zizmor's dependabot audits in the gate (dependabot-execution among them)
+# instead of narrowing `collect` to workflows and actions to get past this one audit.
+
+rules:
+  dependabot-cooldown:
+    config:
+      days: 5

@@ -1,0 +1,43 @@
+{
+  "$schema": "./bundled-components.schema.json",
+  "schemaVersion": 1,
+  "components": [
+    {
+      "id": "dotnet-runtime",
+      "component": ".NET runtime (self-contained)",
+      "version": "10.0.15",
+      "source": {
+        "url": "https://www.nuget.org/packages/Microsoft.NETCore.App.Runtime.win-x64/10.0.15",
+        "ref": "Microsoft.NETCore.App.Runtime.win-x64 10.0.15, the runtime pack that the self-contained publish bundles",
+        "artifacts": [
+          { "name": "microsoft.netcore.app.runtime.win-x64.10.0.15.nupkg", "sha256": "7423f58917342b9e4bf276fb164d5726d2c90fe2fe989c552b9e39056256a035" }
+        ]
+      },
+      "ships": [
+        { "package": "installer", "architecture": "x64", "location": "the program folder, beside the executable" }
+      ],
+      "files": [
+        { "path": "the runtime's own libraries and executables in the program folder", "attribution": "copied by the publish from the Microsoft.NETCore.App.Runtime.win-x64 package; covered by its LICENSE.TXT and THIRD-PARTY-NOTICES.TXT" }
+      ],
+      "licence": "MIT",
+      "noticeTexts": [
+        {
+          "archiveUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.runtime.win-x64/10.0.15/microsoft.netcore.app.runtime.win-x64.10.0.15.nupkg",
+          "archiveSha256": "7423f58917342b9e4bf276fb164d5726d2c90fe2fe989c552b9e39056256a035",
+          "path": "LICENSE.TXT",
+          "sha256": "d7a68596ab69b06f51ca278a6545148e4269a9381c26d597c13df5d88e08cf5b",
+          "file": "dotnet-runtime/LICENSE.TXT"
+        },
+        {
+          "archiveUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.runtime.win-x64/10.0.15/microsoft.netcore.app.runtime.win-x64.10.0.15.nupkg",
+          "archiveSha256": "7423f58917342b9e4bf276fb164d5726d2c90fe2fe989c552b9e39056256a035",
+          "path": "THIRD-PARTY-NOTICES.TXT",
+          "sha256": "6d15e10a101c6bfff2ab4429ed061bf76c456fc4b23ad6b03e0d0f8377148a21",
+          "file": "dotnet-runtime/THIRD-PARTY-NOTICES.TXT"
+        }
+      ],
+      "obligations": ["notice", "licence-copy"],
+      "gplVerdict": { "verdict": "not applicable: the program is MIT and the runtime is MIT", "source": "LICENSE" }
+    }
+  ]
+}

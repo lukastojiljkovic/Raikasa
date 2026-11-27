@@ -1,0 +1,110 @@
+{
+  "$schema": "../../../../../../notices/bundled-components.schema.json",
+  "schemaVersion": 1,
+  "components": [
+    {
+      "id": "inter-font",
+      "component": "Inter",
+      "version": "4.1",
+      "source": {
+        "url": "https://example.invalid/inter",
+        "ref": "v4.1",
+        "artifacts": [{ "name": "Inter-4.1.zip", "sha256": "1111111111111111111111111111111111111111111111111111111111111111" }]
+      },
+      "ships": [{ "package": "crate:fixture-ui", "architecture": "any", "location": "compiled into fixture-ui" }],
+      "files": [
+        { "path": "fonts/Inter-Regular.ttf", "sha256": "2222222222222222222222222222222222222222222222222222222222222222" },
+        { "path": "fonts/Inter-generated.woff2", "attribution": "generated from Inter-Regular.ttf by the build; covered by the Inter notice" }
+      ],
+      "licence": "OFL-1.1",
+      "noticeTexts": [
+        {
+          "archiveUrl": "https://example.invalid/inter/Inter-4.1.zip",
+          "archiveSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "path": "Inter-4.1/LICENSE.txt",
+          "sha256": "390770ff9308217936bd22c85b476efd9b49ac4a9aa2cc05a9465339b0436131",
+          "file": "texts/inter/LICENSE.txt"
+        }
+      ],
+      "obligations": ["notice", "licence-copy"],
+      "gplVerdict": { "verdict": "separate work, the notice travels", "source": "licensing.md, bundled fonts" }
+    },
+    {
+      "id": "inno-setup-loader",
+      "component": "Inno Setup loader and uninstaller",
+      "version": "7.1.1",
+      "source": {
+        "url": "https://example.invalid/issrc",
+        "ref": "is-7_1_1",
+        "artifacts": [{ "name": "innosetup-7.1.1.exe", "sha256": "3333333333333333333333333333333333333333333333333333333333333333" }]
+      },
+      "ships": [{ "package": "installer", "architecture": "x64", "location": "the head of the installer and unins000.exe" }],
+      "files": [{ "path": "unins000.exe", "sha256": "4444444444444444444444444444444444444444444444444444444444444444" }],
+      "licence": "InnoSetup",
+      "noticeTexts": [
+        {
+          "archiveUrl": "https://example.invalid/issrc/is-7_1_1.zip",
+          "archiveSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "path": "license.txt",
+          "sha256": "f71c6d9c7abe2f562998fe1406c34ea3876d52e8f1acdfea6b0793b22d55a8f4",
+          "file": "texts/inno/license.txt"
+        }
+      ],
+      "contains": [
+        {
+          "id": "pascal-script",
+          "component": "RemObjects Pascal Script",
+          "version": "as compiled into Inno Setup 7.1.1",
+          "source": {
+            "url": "https://example.invalid/pascalscript",
+            "ref": "is-7_1_1",
+            "artifacts": [{ "name": "Components/UniPs", "sha256": "6666666666666666666666666666666666666666666666666666666666666666" }]
+          },
+          "ships": [{ "package": "installer", "architecture": "x64", "location": "compiled into the setup loader" }],
+          "files": [],
+          "licence": "LicenseRef-RemObjects-PascalScript",
+          "noticeTexts": [
+            {
+              "archiveUrl": "https://example.invalid/issrc/is-7_1_1.zip",
+              "archiveSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+              "path": "Components/UniPs/LICENSE.md",
+              "sha256": "9ac84a84ee0a6b255f83d60d04b35e5f535214dfd7f275aad9dc2fe4354d16b4",
+              "file": "texts/pascal/LICENSE.txt"
+            }
+          ],
+          "obligations": ["notice", "licence-copy", "about-line"],
+          "aboutLine": "This installer is made using RemObjects Pascal Script, which can be found at https://example.invalid/pascalscript.",
+          "gplVerdict": { "verdict": "separate program that wraps our files", "source": "licensing.md, installers" }
+        }
+      ],
+      "obligations": ["notice", "licence-copy"],
+      "gplVerdict": { "verdict": "separate program that wraps our files", "source": "licensing.md, installers" }
+    },
+    {
+      "id": "dll-fixture",
+      "component": "Fixture DLL library",
+      "version": "3.0.0",
+      "source": {
+        "url": "https://example.invalid/fixturelib",
+        "ref": "fixturelib-3.0.0",
+        "upstreamSource": "https://example.invalid/fixturelib/archive/fixturelib-3.0.0.tar.gz",
+        "artifacts": [{ "name": "fixturelib.dll", "sha256": "7777777777777777777777777777777777777777777777777777777777777777" }]
+      },
+      "ships": [{ "package": "installer", "architecture": "arm64", "location": "fixturelib.dll" }],
+      "files": [{ "path": "fixturelib.dll", "sha256": "7777777777777777777777777777777777777777777777777777777777777777" }],
+      "licence": "LGPL-2.1-only",
+      "noticeTexts": [
+        {
+          "archiveUrl": "https://example.invalid/fixturelib/fixturelib-3.0.0.tar.gz",
+          "archiveSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+          "path": "COPYING",
+          "sha256": "d2c65f9a9a4503ad4e3b54514b2fe8f4024a90966844c5634029251e6dd6d328",
+          "file": "texts/fixturelib/COPYING"
+        }
+      ],
+      "obligations": ["notice", "licence-copy", "source-offer", "relink"],
+      "gplVerdict": { "verdict": "LGPL library, loaded as a separate file", "source": "licensing.md, LGPL" },
+      "sourceAssets": [{ "name": "fixturelib-3.0.0-source.tar.gz", "sha256": "8888888888888888888888888888888888888888888888888888888888888888" }]
+    }
+  ]
+}

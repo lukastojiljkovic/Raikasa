@@ -1,0 +1,1 @@
+RemObjects Pascal Script license (fixture text, zlib style)

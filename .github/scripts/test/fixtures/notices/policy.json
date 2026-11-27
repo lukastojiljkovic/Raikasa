@@ -1,0 +1,121 @@
+{
+  "version": 2,
+  "profile": "gpl",
+  "licence_texts": [
+    {
+      "licence": "MIT",
+      "source": "https://example.invalid/spdx/MIT.txt",
+      "read": "2026-11-25",
+      "licence_file": "licence-texts/MIT.txt",
+      "sha256": "55b874eda57bf25782458c49e2d3fcdc3b5d75d8a44b6cf02912154464758641"
+    },
+    {
+      "licence": "Apache-2.0",
+      "source": "https://example.invalid/spdx/Apache-2.0.txt",
+      "read": "2026-11-25",
+      "licence_file": "licence-texts/Apache-2.0.txt",
+      "sha256": "1328373c7a547bece32b9001448f63b193e0ae1ebe5813b2ba5b47506f83af9e"
+    },
+    {
+      "licence": "MPL-2.0",
+      "source": "https://example.invalid/spdx/MPL-2.0.txt",
+      "read": "2026-11-25",
+      "licence_file": "licence-texts/MPL-2.0.txt",
+      "sha256": "bdf495052c4031a5a544c39232979d8a7e82e447f53bf94eb868fc22923ffa8a"
+    }
+  ],
+  "crate_texts": [
+    {
+      "package": "d-crate",
+      "version": "2.0.0",
+      "source": "https://example.invalid/d-crate/tree/0123456789abcdef0123456789abcdef01234567",
+      "read": "2026-11-25",
+      "why": "the crate's package holds no licence file, so cargo-about wrote its SPDX template, which names no copyright holder (fixture)",
+      "files": [
+        { "path": "crate-texts/d-crate-2.0.0/LICENSE-MIT", "sha256": "2c4e43d256957ed99e41c8a370497b4e4bf0ab5bae12e1361367eeac908c33d6" },
+        { "path": "crate-texts/d-crate-2.0.0/LICENSE.third", "sha256": "51b2f5be958b55267d66258c5fbdcbe54120f331c11b15aec91f4de874c8dd10" }
+      ]
+    }
+  ],
+  "clarifications": [
+    {
+      "ecosystem": "nuget",
+      "package": "File.Origin",
+      "version": "2.6.4",
+      "licence": "Apache-2.0",
+      "evidence": "the package gives LICENSE.txt as a file; the file is the Apache License 2.0 (fixture)",
+      "read": "2026-11-25",
+      "licence_file": {
+        "path": "{path}/LICENSE.txt",
+        "sha256": "5522557f5bf66a0111176df6f2fd7747f3226c8aa6d0e0af6e2741610a89bbe5"
+      }
+    },
+    {
+      "ecosystem": "nuget",
+      "package": "Url.Origin",
+      "version": "1.0.0",
+      "licence": "MIT",
+      "evidence": "the package gives only a licence URL; the committed text is the licence its project publishes (fixture)",
+      "read": "2026-11-25",
+      "licence_file": {
+        "path": "platform/url-origin-licence.txt",
+        "sha256": "ca29527c8950b745f3f0aa4d1844e25aac51d6e019f5e8a1e0c61a931bff8859"
+      }
+    }
+  ],
+  "platform": [
+    {
+      "name": "Fixture runtime",
+      "kind": "toolchain-runtime",
+      "licence": "LicenseRef-fixture-runtime",
+      "version": "as shipped in fixture-toolchain 1.0",
+      "source": "https://example.invalid/runtime/COPYING",
+      "licence_file": "platform/COPYING.runtime.txt",
+      "sha256": "98312030f5f0479ae70baa1041f668aa1013d3c2246f47bd7226eec54ac9cadd",
+      "duties": [
+        "carry the whole file in THIRD-PARTY-NOTICES.md"
+      ],
+      "why": "linked into every binary"
+    },
+    {
+      "name": "Fixture separate program",
+      "kind": "separate-program",
+      "licence": "LicenseRef-fixture-program",
+      "version": "9.9.9",
+      "source": "https://example.invalid/program/license.txt",
+      "licence_file": "platform/license.txt",
+      "sha256": "2614db28ba782f371b91a1622271928adca12453ec3c3ad54b1cb2586669abb7",
+      "about_line": "The installer is made using Fixture Program, which can be found at https://example.invalid/program.",
+      "duties": [
+        "keep every copyright notice and web address in place"
+      ],
+      "why": "wraps our files"
+    },
+    {
+      "name": "Fixture upstream binary",
+      "kind": "upstream-binary",
+      "licence": "LicenseRef-fixture-upstream",
+      "version": "0.1.0",
+      "source": "https://example.invalid/upstream/blob/0.1.0/LICENSE",
+      "read": "2026-11-18",
+      "upstream": "https://example.invalid/upstream/releases/0.1.0",
+      "file": "upstream.sys",
+      "file_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+      "licence_file": "platform/license.txt",
+      "sha256": "2614db28ba782f371b91a1622271928adca12453ec3c3ad54b1cb2586669abb7",
+      "links_microsoft_runtime": "import",
+      "microsoft_runtime_dlls": [
+        "vcruntime140.dll",
+        "msvcp140.dll"
+      ],
+      "installer_runtime_check": true,
+      "passes_on": "Redistributions must keep this notice.\nThe name of the upstream must not be used to endorse a product.",
+      "passes_on_kind": "listed-restrictions",
+      "passes_on_source": "https://example.invalid/upstream/blob/0.1.0/LICENSE",
+      "duties": [
+        "ship the file unmodified"
+      ],
+      "why": "bundled as the upstream publishes it"
+    }
+  ]
+}

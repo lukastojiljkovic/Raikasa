@@ -1,0 +1,315 @@
+{
+  "$comment": [
+    "Licence policy, version 2. Rewritten 2026-11-18 for the approach of 2026-11-18 (PG-D27).",
+    "The one machine-readable licence whitelist of this repository (PG-D3; T1 R7). Three scripts read it: .github/scripts/check-licences.mjs judges every dependency and record against it, .github/scripts/generate-notices.mjs writes THIRD-PARTY-NOTICES.md from its platform entries, its nuget clarifications and its licence_texts, crate_texts and source_links, and .github/scripts/licence-configs.mjs generates deny.toml, about.toml, .github/dependency-review-config.yml and the three nuget-license files .github/nuget-license/allowed-licenses.json, overrides.json (from the nuget clarifications) and licensefile-mappings.json (always {}, because a nuget clarification pins the installed file, never a committed copy; nuget-license is still given the file) from it (T1 R8). Change this file, then run `node .github/scripts/licence-configs.mjs --write`; CI runs `--check` and fails on any drift. The lists follow knowledge/licensing.md (§2.3 the whitelist, §2.6 patents, §8.5 the gate) and engineering-standard.md §3.10.",
+    "Nobody accepts a licence by hand (PG-D2; AP §1). A licence that is not on the allow list of its class and profile fails. The agent then writes a clarification (the true licence is on the list, with evidence and the licence file's SHA-256), replaces the dependency, or drops the part. There is no exception list and no expiry date. Luka is never asked about a licence.",
+    "profile (PG-D1; T1 R2): gpl = GPL-3.0-or-later without the linking exception; gpl-le = with the GPL linking exception (PerfWindow PW-D12, Instructium IN-D13); reserved = the CV; permissive = a repository not yet relicensed. Set it when the template is adopted; both scripts refuse to run while it is the placeholder.",
+    "classes (PG-D1; T1 R1): L linked code, F fonts, C content and data, M model weights, P platform components, T build and CI tools (never shipped). Package-manager trees are class L unless class_overrides names a package; vendored files take the class of their REUSE.toml path group. Classes F, C, M and T are the same in every profile; only L depends on the profile.",
+    "deny: SPDX id (a * glob is allowed) -> the reason the gate prints. It applies to classes L, F, C and M and to toolchain runtimes, and wins over every allow list, except that tier2 licences pass on a pointer record of class C or M (PG-D2). Ids not in deny and not on an allow list fail too, with the generic reason. Class T and the separate programs and upstream binaries of class P use only their own allow lists, because combining is not at stake there (T1 R4, §2.6; PG-D36 (3)).",
+    "allow.P: per platform kind. A toolchain runtime is linked into our binaries, so its licence must also pass the profile's class-L list, or be one of the ids listed for it here.",
+    "tier2 (PG-D2, PG-D33 (4)): data and model licences that are fetched only by the user's explicit action from where they are published, with the licence shown first; never committed, bundled, hosted, preselected, recommended or the default. A model's tier is the most restrictive of its own licence and its datasets' licences; a dataset with no stated licence, or with a US-only status, makes it tier 2 at most.",
+    "pointer_only (PG-D33): a record of such a class must be a pointer (kind: pointer), fetched from the rights holder's own upload at the user's action. No model file is bundled, hosted, committed, published, uploaded as a CI artifact or attached to a release.",
+    "licence_refs: LicenseRef- ids this policy defines. requires: fields a record that carries the id must have. LicenseRef-PD-USGov and LicenseRef-Public-Domain-US-Government need a second_basis (PG-D32): { basis: A|B|C, evidence, url, read, sha256 }. An id with requires is never written into a tool config, because only the record check can see the fields.",
+    "class_overrides: { ecosystem: cargo|npm|nuget|pypi|maven, package, class, why }. A package judged under another class, such as a crate or npm package that bundles fonts (class F; T1 R9). In deny.toml it becomes a [[licenses.exceptions]] entry for that crate only.",
+    "lgpl_dynamic (gpl-le only; T1 R2): { ecosystem, package, file, sha256, why }. An LGPL library allowed only as a separately loaded, replaceable file.",
+    "clarifications (T1 R6): { ecosystem, package, version, licence, evidence, read (YYYY-MM-DD), licence_file: { path, sha256, cargo_deny_hash (cargo only) } }. The licence must pass its class and profile. path is relative to the crate root for cargo. For nuget it names the installed file, ~/.nuget/packages/<id in lower case>/<version in lower case>/<file>: nuget-license reports no install path, so {path} cannot be found, and the generated overrides.json gives the package its licence by id and version alone, whatever the package's own file holds, so a committed copy as the pin would not pin the package (B0-U13, 2026-11-25: with the installed file as the pin, a changed installed file and a repack with the same id and version each failed with 'its clarification no longer holds'; with a committed copy as the pin, a changed installed file passed). licence-configs.mjs, and check-licences.mjs, which reads the policy through it, therefore refuse a nuget clarification whose path is a copy in the repository as a malformed policy (exit 2; B0-U01). For the other ecosystems path may use {path} (the install path the tool reports), ~/ or a path from the repository root. A changed licence file fails the gate, and a clarification that matches no package of its ecosystem is spent and fails.",
+    "licence_texts (B0-U04, B0-U13): { licence, source, read (YYYY-MM-DD), licence_file, sha256 }. The pinned text of a licence that a NuGet package declares as an SPDX expression but does not ship. One entry per licence: a WITH expression such as \"Apache-2.0 WITH LLVM-exception\" is one licence, and an expression with AND or OR needs a text for each licence in it. The text is committed under .github/licence-texts/ exactly as its source publishes it; licence_file is its path from the repository root (or ~/), and sha256 null means not pinned yet, which fails when a package needs the text. generate-notices.mjs checks licence, licence_file and sha256, names a licence pinned twice as a problem, and writes each text once with the Copyright line of every package that uses it.",
+    "crate_texts (B0-U04, B0-U12): { package, version, source, read, why, files: [{ path, sha256 }] }, or { crates: [\"name version\", ...], source, read, why, files } in place of package and version for crates of one repository that share their texts (the egui crates). The licence text of a crate whose package ships no LICENSE, LICENCE or COPYING file, for which cargo-about writes only the SPDX template, which names no copyright holder. Each path is from the repository root (or ~/), and sha256 null means not pinned yet, which fails when the report holds the crate. generate-notices.mjs reads the list with --cargo-about only: a malformed entry and a crate listed twice are named problems, and an entry for a crate that the report does not hold is a note on stderr that does not fail the run (a per-installer report holds fewer crates). A committed text is the bytes of the upstream's git blob, never a Windows working-tree copy (core.autocrlf may have changed its line ends), taken at the commit that the crate's package records in .cargo_vcs_info.json, or at the release tag where that commit is not served (egui 0.37.0; B0-U12).",
+    "source_links: { ecosystem (cargo or nuget), package, version, url (https) }. The page that the Source column of THIRD-PARTY-NOTICES.md names for a package where the project's own URL is not where its licence points (an MPL-2.0 component gets its source at the exact release tag). generate-notices.mjs names a malformed entry as a problem.",
+    "platform (PG-D3, PG-D10, PG-D36 (3); T1 R4, R5): named components with their licence text pinned by SHA-256. kind separate-program: a program we only run or that wraps our files (aggregation, not combination; Inno Setup and Pascal Script). kind toolchain-runtime: runtime objects the toolchain links into every binary (the mingw-w64 runtime clarification of PG-D10; LLVM's libunwind and LLVM's compiler-rt, one entry each because each has its own LICENSE.TXT). kind upstream-binary: an upstream's own unmodified release binary, recorded with the fields of upstream-binary.schema.json: name, version, licence, source, read, licence_file, sha256 (of the text), file, file_sha256, upstream, links_microsoft_runtime (static|import|none; microsoft_runtime_dlls and installer_runtime_check true as well where it is import), passes_on (the conditions it passes on, kept as it states them), passes_on_kind (none|listed-restrictions), passes_on_source, duties and why; source_ref is optional. One that passes on an indemnity or a duty to make users accept further terms does not ship: the schema refuses those words in passes_on, and `check-licences.mjs --format platform` applies the same word screen (PASSES_ON_REFUSED) and also refuses every passes_on_kind but none and listed-restrictions, a missing one included, and kind none with a non-empty passes_on, and listed-restrictions with an empty passes_on or no passes_on_source. Any platform entry may carry about_line, a non-empty string: the line its licence asks for, which generate-notices.mjs writes under \"Required acknowledgements\" in every notices file; the template's RemObjects Pascal Script entry carries the installer contract's wording, which the installer checker's IC-18 accepts (an app with no installer deletes that entry). licence_file is the path of the pinned text from the repository root (or ~/); the template's own entries point into .github/licence-texts/, where each text is kept byte for byte as its source publishes it (never reformatted or given other line endings: the folder's own .gitattributes, `* -text`, keeps git from changing a line ending), and source is the URL of that file at an exact commit (the commit of the release tag where the upstream tags its releases; the mingw-w64 commit has no tag), with read (YYYY-MM-DD) and source_ref saying how the commit was found. No text there ends in .md, so no Markdown linter or spell check reads a text that is not ours. A text of an upstream binary goes in the same folder. The record format of an upstream binary is upstream-binary.schema.json in the workspace's knowledge/templates/records/; an upstream binary also pins its own file by file_sha256, with file a path relative to the folder the build vendors upstream binaries into. sha256 or file_sha256 null means not pinned yet. `node .github/scripts/check-licences.mjs --format platform` fails on every unpinned entry and on every licence text that no longer hashes to its pin; it is the `Toolchain and upstream-binary records` step of the licence job in ci-rust.yml (supply-chain) and the `Platform records` step of ci-dotnet.yml (licences). With --upstream-dir, the package job checks every vendored binary against its record (PG-D36 (3)).",
+    "denied_components (PG-D31; licensing.md §2.6): packages whose presence fails the gate whatever their licence, because they implement a format whose patent holders license it for money, or one that a pool also licenses. The package names are a starting set (inference: crate and npm names as known when this was written). The string scan of the shipped binaries is the backstop: `check-licences.mjs --format scan`, the `Denied-codec string scan` step of ci-rust.yml's package job, fails a binary that holds a scan_strings entry. scan_exempt names the one place a string is allowed, which is never a download of ours (PG-D37), so the scan applies no exemption.",
+    "denied_features (PG-D6, PG-D31): crate features that must stay off. Generated into deny.toml [[bans.features]].",
+    "own_sources (S-27; licensing.md §0, §3.3, §3.16): { ecosystem: cargo, source (the https git URL of the repository), crates: [names], licence, why }. Luka's own crates fetched from another of his repositories: the S-27 kit crates (`kit-*`) from their shared home and the S-01 crate once it leaves PerfWindow. They are admitted by source, not by licence: each source joins rust.allow_git, and each crate gets its own exception for its licence in deny.toml, about.toml and the dependency review, while class L stays as the profile has it. In a gpl-le program they are covered by that program's own §7 permission (PW-D12, IN-D13), which is why profile_reasons' rule against third-party GPL code does not apply to them (inference, the S-27 licensing rule of 2026-11-18). Only the gpl and gpl-le profiles take them, and the licence must be GPL-3.0-or-later (optionally WITH an exception). Never list a third party's crate here.",
+    "rust: settings that only deny.toml and about.toml use: build targets (PG-D10), RustSec advisories ignored with { id, reason } (each names the condition that retires it), and allowed git sources.",
+    "generate: the files licence-configs.mjs writes and checks; delete the entries this repository's stacks do not use."
+  ],
+  "version": 2,
+  "profile": "permissive",
+  "generate": [".github/dependency-review-config.yml", ".github/nuget-license/allowed-licenses.json", ".github/nuget-license/overrides.json", ".github/nuget-license/licensefile-mappings.json"],
+  "classes": {
+    "L": "linked, compiled or bundled code: every package-manager dependency, and vendored code under third_party/",
+    "F": "fonts shipped in a program, a package or a site",
+    "C": "content and data: images, icons, audio, video, 3D, texts, datasets",
+    "M": "model weights with their tokenizer and configuration files: pointer-only (PG-D33)",
+    "P": "platform components: separate programs, toolchain runtimes and upstream binaries, each a named platform entry",
+    "T": "build and CI tools, never shipped: only the licence for our own use matters (T1 §2.6)"
+  },
+  "allow": {
+    "L": {
+      "common": [
+        "MIT", "MIT-0", "0BSD", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Zlib", "BSL-1.0", "Unlicense", "CC0-1.0",
+        "Unicode-3.0", "Unicode-DFS-2016", "Python-2.0", "PSF-2.0", "BlueOak-1.0.0", "CDLA-Permissive-2.0", "WTFPL",
+        "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "MPL-2.0"
+      ],
+      "gpl": [
+        "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later",
+        "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later"
+      ],
+      "gpl-le": [],
+      "reserved": [],
+      "permissive": ["LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later", "LicenseRef-Microsoft-WindowsAppSDK", "LicenseRef-Microsoft-WindowsSDK-BuildTools"]
+    },
+    "F": ["OFL-1.1", "OFL-1.1-RFN", "OFL-1.1-no-RFN", "Apache-2.0", "MIT", "Bitstream-Vera", "CC-BY-4.0", "CC-BY-SA-4.0"],
+    "C": [
+      "CC0-1.0", "PDDL-1.0", "CC-BY-4.0", "CC-BY-3.0", "CC-BY-2.5", "CC-BY-2.0", "CC-BY-SA-4.0", "CC-BY-SA-3.0",
+      "ODbL-1.0", "ODC-By-1.0", "CDLA-Permissive-2.0", "MIT", "ISC", "Apache-2.0", "OFL-1.1",
+      "LicenseRef-Public-Domain", "LicenseRef-PD-USGov", "LicenseRef-Public-Domain-US-Government"
+    ],
+    "M": ["MIT", "Apache-2.0", "BSD-3-Clause", "MPL-2.0", "CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0", "CDLA-Permissive-2.0"],
+    "P": {
+      "separate-program": [
+        "MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "MPL-2.0",
+        "InnoSetup", "LicenseRef-RemObjects-PascalScript",
+        "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later",
+        "GPL-2.0-only", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later"
+      ],
+      "upstream-binary": [
+        "MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "MPL-2.0",
+        "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later",
+        "GPL-2.0-only", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later"
+      ],
+      "toolchain-runtime": ["LicenseRef-mingw-w64-runtime"]
+    },
+    "T": [
+      "MIT", "MIT-0", "0BSD", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Zlib", "BSL-1.0", "Unlicense", "CC0-1.0",
+      "Python-2.0", "PSF-2.0", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "MPL-2.0",
+      "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later",
+      "GPL-2.0-only", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later", "EPL-2.0", "LPPL-1.3c"
+    ]
+  },
+  "tier2": {
+    "classes": ["C", "M"],
+    "licences": ["CC-BY-NC-*", "*OpenRAIL*", "Llama*", "Gemma*", "LFM*"]
+  },
+  "pointer_only": ["M"],
+  "deny": {
+    "CC-BY-NC-*": "non-commercial: the FSF calls it non-free and Fedora does not allow it; our GPL lets every recipient sell copies, so an NC file in the same download breaks that promise. Tier 2 at most, as a pointer the user fetches (PG-D2; T1 §2.4)",
+    "CC-BY-ND-*": "no derivatives, while our licences grant modification (T1 §2.4)",
+    "SSPL-1.0": "offering the program as a service requires releasing the whole service's source (§13); not OSI-approved (T1 §2.4)",
+    "BUSL-1.1": "only non-production use until the Change Date (T1 §2.4)",
+    "Elastic-2.0": "not OSI-approved; restricts use (T1 §2.4)",
+    "*Commons-Clause*": "forbids selling copies: non-free (FSF; T1 §2.4)",
+    "PolyForm-Noncommercial-*": "non-commercial licence (T1 §2.4)",
+    "*OpenRAIL*": "behavioural-use licence: its restrictions must flow down as enforceable terms and the licensor may restrict use remotely. Tier 2 at most (PG-D2; T1 §2.4)",
+    "Llama*": "custom model licence with a user threshold that requires asking Meta for a licence. Tier 2 at most (PG-D2; T1 §2.4)",
+    "Gemma*": "Gemma Terms of Use: flow-down use restrictions and a remote-restriction right. Tier 2 at most (PG-D2; T1 §2.4)",
+    "LFM*": "revenue threshold above which a commercial licence is required. Tier 2 at most (PG-D2; T1 §2.4)",
+    "JSON": "\"shall be used for Good, not Evil\" is a use restriction (FSF; T1 §2.4)",
+    "Ubuntu-font-1.0": "Debian ships it only in non-free and Fedora does not allow it; egui apps build eframe without default_fonts and load their own OFL fonts (PG-D6; T1 R11)",
+    "LicenseRef-ubuntu-font-1.0": "Fedora's id for the Ubuntu Font Licence (PG-D6; T1 R11)",
+    "NOASSERTION": "no licence stated: without a licence the default copyright law applies, so there is no permission (T1 §2.4)",
+    "NONE": "no licence stated: no permission (T1 §2.4)",
+    "UNKNOWN": "no licence found: no permission until a clarification records the true licence with evidence (PG-D2)",
+    "UNLICENSED": "npm's mark for a package that grants no licence (T1 §2.4)",
+    "GPL-2.0-only": "GPL-incompatible in linked code (FSF #GPLv2); fine for a separate program we only run (platform entry, T1 R4)",
+    "GPL-2.0": "the deprecated id of GPL-2.0-only: GPL-incompatible in linked code (FSF #GPLv2)",
+    "AGPL-3.0-only": "changes the duties of the whole program (source for network users); no project uses an AGPL profile (PG-D1)",
+    "AGPL-3.0-or-later": "changes the duties of the whole program (source for network users); no project uses an AGPL profile (PG-D1)",
+    "CDDL-1.0": "GPL-incompatible in linked code (FSF #CDDL); fine for a separate program",
+    "CDDL-1.1": "GPL-incompatible in linked code (FSF #CDDL); fine for a separate program",
+    "EPL-1.0": "GPL-incompatible in linked code (FSF #EPL); fine for a separate program",
+    "EPL-2.0": "GPL-incompatible in linked code unless GPL is named as a secondary licence, which an OR expression shows (FSF #EPL2)",
+    "MPL-1.1": "GPL-incompatible in linked code (FSF #MPL)",
+    "MPL-2.0-no-copyleft-exception": "MPL-2.0 with Exhibit B refuses the secondary-licence route into the GPL (T1 §2.3.1)",
+    "MS-PL": "GPL-incompatible in linked code (FSF #ms-pl)",
+    "MS-RL": "GPL-incompatible in linked code (FSF #ms-rl)",
+    "CPL-1.0": "GPL-incompatible in linked code (FSF #CommonPublicLicense10)",
+    "IPL-1.0": "GPL-incompatible in linked code (FSF #IBMPL)",
+    "OpenSSL": "the old OpenSSL licence is GPL-incompatible in linked code (FSF #OpenSSL)",
+    "CPAL-1.0": "GPL-incompatible in linked code (FSF #CPAL)",
+    "LPPL-1.3a": "GPL-incompatible in linked code (FSF #LPPL-1.3a); TeX packages are class T for the CV",
+    "LPPL-1.3c": "GPL-incompatible in linked code (FSF #LPPL-1.3a); TeX packages are class T for the CV",
+    "EUPL-1.1": "copyleft incompatible with the GPL except through a relicensing judgement, which the gate does not make (FSF #EUPL-1.2)",
+    "EUPL-1.2": "copyleft incompatible with the GPL except through a relicensing judgement, which the gate does not make (FSF #EUPL-1.2)"
+  },
+  "profile_reasons": {
+    "gpl-le": {
+      "GPL-*": "a gpl-le program takes no third-party GPL code: only the copyright holder can grant the linking exception (GPL FAQ #GPLIncompatibleLibs), and asking is contact (AP §1; T1 §2.3.1)",
+      "LGPL-*": "a gpl-le program takes LGPL only as a separately loaded library named in lgpl_dynamic (T1 R2)"
+    },
+    "reserved": {
+      "*GPL*": "the CV is all rights reserved: no LGPL or GPL code is bundled into it (T1 R2)"
+    },
+    "permissive": {
+      "GPL-*": "a repository not yet relicensed takes no GPL code until its relicensing merges (T1 R2)"
+    }
+  },
+  "aliases": {
+    "MIT License": "MIT",
+    "The MIT License": "MIT",
+    "The MIT License (MIT)": "MIT",
+    "Apache License, Version 2.0": "Apache-2.0",
+    "The Apache License, Version 2.0": "Apache-2.0",
+    "The Apache Software License, Version 2.0": "Apache-2.0",
+    "Apache License 2.0": "Apache-2.0",
+    "BSD 2-Clause License": "BSD-2-Clause",
+    "BSD 3-Clause License": "BSD-3-Clause",
+    "ISC License (ISCL)": "ISC",
+    "Mozilla Public License 2.0 (MPL 2.0)": "MPL-2.0"
+  },
+  "licence_refs": {
+    "LicenseRef-Microsoft-WindowsAppSDK": {
+      "meaning": "Microsoft's licence terms for the Windows App SDK packages, a licence file (license.txt) in each package that has no SPDX id. 2.0.x ships these packages inside its self-contained build, the transition of PG-D20 (RF-D22, RF-D26, RF-D28). It is allowed on the permissive profile's class L list for this release line only; 3.0.0 ships none of them and the id leaves the policy with them",
+      "requires": []
+    },
+    "LicenseRef-Microsoft-WindowsSDK-BuildTools": {
+      "meaning": "Microsoft's Windows SDK licence terms for the SDK build-tool packages that the WinUI build restores as build-time tools that are never shipped. The policy machinery cannot put a NuGet package in class T (class_overrides takes F or C only), so they are judged in class L and the id sits on the permissive profile's list beside the Windows App SDK's",
+      "requires": []
+    },
+    "LicenseRef-Public-Domain": {
+      "meaning": "a term expired under both Serbian and EU rules, or the holding institution's own CC0 or PDM release (PG-D32 (B); T1 §2.3.3)",
+      "requires": ["evidence"]
+    },
+    "LicenseRef-PD-USGov": {
+      "meaning": "a US federal work (17 U.S.C. §105): a US-only basis that never stands alone (PG-D32)",
+      "requires": ["second_basis"]
+    },
+    "LicenseRef-Public-Domain-US-Government": {
+      "meaning": "a US federal work (17 U.S.C. §105): a US-only basis that never stands alone (PG-D32)",
+      "requires": ["second_basis"]
+    },
+    "LicenseRef-RemObjects-PascalScript": {
+      "meaning": "RemObjects Pascal Script's licence, compiled into Inno Setup's setup stub; its text is pinned in the platform entry (PG-D3; IN-D26)",
+      "requires": []
+    },
+    "LicenseRef-mingw-w64-runtime": {
+      "meaning": "the compound COPYING.MinGW-w64-runtime.txt, carried whole; pinned in the platform entry (PG-D10)",
+      "requires": []
+    }
+  },
+  "class_overrides": [],
+  "lgpl_dynamic": [],
+  "clarifications": [
+    {"ecosystem":"nuget","package":"Microsoft.Web.WebView2","version":"1.0.3719.77","licence":"BSD-3-Clause","evidence":"the package's own LICENSE.txt is the BSD 3-clause text of Microsoft's WebView2 (nuget-license reports it as a file); its NOTICE.txt carries the third-party notices","read":"2026-11-27","licence_file":{"path":"~/.nuget/packages/microsoft.web.webview2/1.0.3719.77/LICENSE.txt","sha256":"0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55"}},
+    {"ecosystem":"nuget","package":"Microsoft.WindowsAppSDK.Base","version":"2.0.4","licence":"LicenseRef-Microsoft-WindowsAppSDK","evidence":"the package's own license.txt, Microsoft's Windows App SDK terms (the same text in all four packages); shipped by 2.0.x under PG-D20's transition (RF-D22, RF-D28)","read":"2026-11-27","licence_file":{"path":"~/.nuget/packages/microsoft.windowsappsdk.base/2.0.4/license.txt","sha256":"5b11e6347756e40fe0274bc08c97f89201b94f0d50181a09a00f1f4740840501"}},
+    {"ecosystem":"nuget","package":"Microsoft.WindowsAppSDK.Foundation","version":"2.3.12","licence":"LicenseRef-Microsoft-WindowsAppSDK","evidence":"the package's own license.txt, Microsoft's Windows App SDK terms (the same text in all four packages); shipped by 2.0.x under PG-D20's transition (RF-D22, RF-D28)","read":"2026-11-27","licence_file":{"path":"~/.nuget/packages/microsoft.windowsappsdk.foundation/2.3.12/license.txt","sha256":"5b11e6347756e40fe0274bc08c97f89201b94f0d50181a09a00f1f4740840501"}},
+    {"ecosystem":"nuget","package":"Microsoft.WindowsAppSDK.InteractiveExperiences","version":"2.1.9","licence":"LicenseRef-Microsoft-WindowsAppSDK","evidence":"the package's own license.txt, Microsoft's Windows App SDK terms (the same text in all four packages); shipped by 2.0.x under PG-D20's transition (RF-D22, RF-D28)","read":"2026-11-27","licence_file":{"path":"~/.nuget/packages/microsoft.windowsappsdk.interactiveexperiences/2.1.9/license.txt","sha256":"5b11e6347756e40fe0274bc08c97f89201b94f0d50181a09a00f1f4740840501"}},
+    {"ecosystem":"nuget","package":"Microsoft.WindowsAppSDK.WinUI","version":"2.3.9","licence":"LicenseRef-Microsoft-WindowsAppSDK","evidence":"the package's own license.txt, Microsoft's Windows App SDK terms (the same text in all four packages); shipped by 2.0.x under PG-D20's transition (RF-D22, RF-D28)","read":"2026-11-27","licence_file":{"path":"~/.nuget/packages/microsoft.windowsappsdk.winui/2.3.9/license.txt","sha256":"5b11e6347756e40fe0274bc08c97f89201b94f0d50181a09a00f1f4740840501"}},
+    {"ecosystem":"nuget","package":"Microsoft.Windows.SDK.BuildTools","version":"10.0.26100.4654","licence":"LicenseRef-Microsoft-WindowsSDK-BuildTools","evidence":"build-time tool, never shipped; its nuspec names the licence URL https://aka.ms/WinSDKLicenseURL and the package holds no licence file, so the pinned file is the nuspec","read":"2026-11-27","licence_file":{"path":"~/.nuget/packages/microsoft.windows.sdk.buildtools/10.0.26100.4654/microsoft.windows.sdk.buildtools.nuspec","sha256":"aac383f40ed26caedb6b748ae1470722380039baec34923bb37006517cada5a7"}},
+    {"ecosystem":"nuget","package":"Microsoft.Windows.SDK.BuildTools.MSIX","version":"1.7.251221100","licence":"LicenseRef-Microsoft-WindowsSDK-BuildTools","evidence":"build-time tool, never shipped; the package's own sdk_license.txt, Microsoft's Windows SDK terms","read":"2026-11-27","licence_file":{"path":"~/.nuget/packages/microsoft.windows.sdk.buildtools.msix/1.7.251221100/sdk_license.txt","sha256":"a7a5c7e7ff998558983d6aca2702117c328aeb0c6404d298cb275f5623c6fd13"}}
+  ],
+  "licence_texts": [
+    {"licence":"MIT","source":"https://www.nuget.org/packages/Microsoft.NETCore.App.Runtime.win-x64/10.0.15 (LICENSE.TXT, the MIT text of the .NET runtime); the System.* packages below declare MIT in their nuspec and ship no licence file of their own","read":"2026-11-27","licence_file":".github/licence-texts/MIT.txt","sha256":"d7a68596ab69b06f51ca278a6545148e4269a9381c26d597c13df5d88e08cf5b"}
+  ],
+  "crate_texts": [],
+  "source_links": [],
+  "platform": [
+    {
+      "name": "Inno Setup",
+      "kind": "separate-program",
+      "licence": "InnoSetup",
+      "version": "7.1.1",
+      "source": "https://github.com/jrsoftware/issrc/blob/2527da77ff7983514f535d19391a748c5d898336/license.txt",
+      "source_ref": "jrsoftware/issrc tag is-7_1_1 = commit 2527da77ff7983514f535d19391a748c5d898336; the file equals license.txt of the 7.1.1 install (same SHA-256)",
+      "read": "2026-11-18",
+      "licence_file": ".github/licence-texts/inno-setup-license.txt",
+      "sha256": "2e5346868c2a18434489824e11d65c3031620f792fefc415d05f19cd441abf5c",
+      "duties": [
+        "keep every copyright notice and web address in place (About box, THIRD-PARTY-NOTICES.md)",
+        "mark modified versions plainly: Inno Setup is used unmodified"
+      ],
+      "why": "the installer's setup stub and uninstaller ship inside every installer; Inno wraps our files and is not linked with them (T1 R4; PS-D9, IN-D26). spdx.org lists the id InnoSetup (PH-D76). Its purchase page asks only commercial users to buy a licence; no project is commercial (AP §1), so nothing is owed or bought (PS-D9). In CI it comes from the vendor's download, pinned by URL and SHA-256 (RF-D38)."
+    },
+    {
+      "name": "RemObjects Pascal Script",
+      "kind": "separate-program",
+      "licence": "LicenseRef-RemObjects-PascalScript",
+      "version": "as compiled into Inno Setup 7.1.1",
+      "source": "https://github.com/jrsoftware/issrc/blob/2527da77ff7983514f535d19391a748c5d898336/Components/UniPs/LICENSE.md",
+      "source_ref": "jrsoftware/issrc tag is-7_1_1 = commit 2527da77ff7983514f535d19391a748c5d898336, Components/UniPs/LICENSE.md: the copy that Inno Setup 7.1.1 compiles in; committed byte for byte under a .txt name, so that no Markdown linter or spell check reads a text that is not ours (its second line holds tabs)",
+      "read": "2026-11-18",
+      "licence_file": ".github/licence-texts/pascal-script-LICENSE.txt",
+      "sha256": "a08799bb2385a3af99a9bbb7c746d0ad9ac7dd07be0fb1473f2f4d1dc3e11bd1",
+      "duties": [
+        "a visible line in the About box or the documentation that the installer is made using RemObjects Pascal Script, and where it can be found"
+      ],
+      "about_line": "Made using RemObjects Pascal Script (https://github.com/remobjects/pascalscript)",
+      "why": "compiled into Inno Setup's setup stub; its own entry because its licence is separate from Inno's (PG-D3; IN-D26)"
+    }
+  ],
+  "denied_components": [
+    {
+      "component": "H.264 and HEVC codecs",
+      "reason": "H.264 and HEVC are licensed for money by their patent holders: no program ships an implementation of them, and none ever ships an encoder; they are reached only through what Windows or the user already has (PG-D31)",
+      "cargo": ["openh264", "openh264-sys2", "x264", "x265", "libde265"],
+      "npm": [],
+      "nuget": [],
+      "pypi": [],
+      "maven": [],
+      "scan_strings": ["openh264", "x264", "x265", "libde265"],
+      "scan_exempt": "OpenH264 inside the Electron that Nexus's installer fetches from Electron's publisher; Nexus switches it off at start and ships none of it (PG-D37)"
+    },
+    {
+      "component": "AAC codecs",
+      "reason": "the AAC family is licensed for money by its patent holders (PG-D31)",
+      "cargo": ["fdk-aac", "fdk-aac-sys", "symphonia-codec-aac"],
+      "npm": [],
+      "nuget": [],
+      "pypi": [],
+      "maven": [],
+      "scan_strings": ["fdk-aac"],
+      "scan_exempt": ""
+    },
+    {
+      "component": "full FFmpeg builds",
+      "reason": "a full FFmpeg build carries H.264, HEVC and AAC code (PG-D31)",
+      "cargo": ["ffmpeg-next", "ffmpeg-sys-next"],
+      "npm": ["ffmpeg-static", "@ffmpeg-installer/ffmpeg", "@ffmpeg/core"],
+      "nuget": [],
+      "pypi": [],
+      "maven": [],
+      "scan_strings": ["libavcodec"],
+      "scan_exempt": "the codec-free FFmpeg zip that Nexus's installer fetches from Electron's release page (PG-D37)"
+    },
+    {
+      "component": "AV1, VP8, VP9 and Opus codecs",
+      "reason": "their developers grant them royalty-free, but third parties also license them through a pool or a signed programme, so they are not bundled and are reached through Windows (PG-D31)",
+      "cargo": ["dav1d", "dav1d-sys", "rav1d", "rav1e", "aom-sys", "env-libvpx-sys", "opus", "audiopus_sys"],
+      "npm": [],
+      "nuget": [],
+      "pypi": [],
+      "maven": [],
+      "scan_strings": ["libaom", "dav1d", "libvpx", "libopus"],
+      "scan_exempt": "inside Chromium in the Electron that Nexus's installer fetches, which holds Opus, VP8, VP9 and AV1 code that Chromium cannot switch off (PG-D31 residual, PG-D37)"
+    },
+    {
+      "component": "lossy WebP (VP8)",
+      "reason": "lossy WebP is VP8, which a pool also licenses (PG-D31; T8 F14, F15); lossless WebP goes through Windows (WIC) or a lossless-only decoder",
+      "cargo": ["libwebp-sys", "webp"],
+      "npm": [],
+      "nuget": [],
+      "pypi": [],
+      "maven": [],
+      "scan_strings": ["libwebp"],
+      "scan_exempt": "a libwebp built with no VP8 code, for lossless WebP output only, if Contextool's S-I1 finds no WIC WebP encoder (CT-D18, PG-D31; whether libwebp builds that way was not checked). Contextool removes this entry only once its build is shown to hold no VP8 code, and records that in docs/format-sources.md"
+    }
+  ],
+  "denied_features": [
+    {
+      "crate": "eframe",
+      "features": ["default_fonts"],
+      "reason": "brings the Ubuntu font (Ubuntu-font-1.0); every egui app sets default-features = false and loads its own OFL fonts (PG-D6)"
+    },
+    {
+      "crate": "egui",
+      "features": ["default_fonts"],
+      "reason": "another crate can turn the fonts back on through feature unification (PG-D6; T1 R11)"
+    },
+    {
+      "crate": "epaint",
+      "features": ["default_fonts"],
+      "reason": "the crate that holds the default fonts behind the feature (inference; PG-D6)"
+    },
+    {
+      "crate": "image",
+      "features": ["webp"],
+      "reason": "pulls image-webp, which holds a lossy VP8 decoder (R1 §2.10; PG-D31): an app that uses image enables PNG and JPEG only. PeepHole, whose register decodes lossless WebP (VP8L) through image and checks the VP8 or VP8L chunk before decoding (PH-D18; spec Formats, v1), removes this entry at adoption; no other repository does"
+    }
+  ],
+  "own_sources": [],
+  "rust": {
+    "targets": ["x86_64-pc-windows-gnullvm"],
+    "advisories_ignore": [],
+    "allow_git": []
+  }
+}

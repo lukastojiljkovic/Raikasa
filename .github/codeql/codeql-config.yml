@@ -1,0 +1,11 @@
+# CodeQL configuration: the one place the analysis is configured.
+# The action refuses `config-file` and `queries` together, so queries live here.
+name: "CodeQL security-extended"
+
+queries:
+  - uses: security-extended
+
+# Exclude a path only with a written reason, in this file, next to the entry:
+# an exclusion hides every finding in that path from every reader.
+# paths-ignore:
+#   - path/with/reason

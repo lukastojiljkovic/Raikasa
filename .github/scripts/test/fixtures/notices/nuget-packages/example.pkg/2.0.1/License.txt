@@ -1,0 +1,3 @@
+# Example package licence
+
+Example.Pkg is MIT licensed (fixture text).
