@@ -1,11 +1,11 @@
 name: Bug report
-description: Something in Refreshify doesn't work as it should.
+description: Something in Raikasa doesn't work as it should.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting. For a security problem, follow the [security policy](https://github.com/lukastojiljkovic/Refreshify/security/policy) instead.
+        Thanks for reporting. For a security problem, follow the [security policy](https://github.com/lukastojiljkovic/Raikasa/security/policy) instead.
   - type: textarea
     id: what-happened
     attributes:
@@ -30,9 +30,9 @@ body:
       description: If a step failed, select Get help on it, keep "Hide personal details" on, copy the report and paste it here.
       render: markdown
   - type: input
-    id: refreshify-version
+    id: raikasa-version
     attributes:
-      label: Refreshify version
+      label: Raikasa version
       description: Settings > About
       placeholder: "2.0.0"
     validations:

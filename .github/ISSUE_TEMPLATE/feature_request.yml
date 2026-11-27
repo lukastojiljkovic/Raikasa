@@ -6,7 +6,7 @@ body:
     id: problem
     attributes:
       label: The problem
-      description: What would you like Refreshify to fix or do, and when do you run into it?
+      description: What would you like Raikasa to fix or do, and when do you run into it?
     validations:
       required: true
   - type: textarea

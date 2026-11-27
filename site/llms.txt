@@ -1,6 +1,6 @@
-# Refreshify
+# Raikasa
 
-> Refreshify is a free, open-source (MIT) Windows maintenance app by Luka Stojiljković. It cleans up, repairs and updates a PC with the tools Windows already has (DISM, SFC, chkdsk, Windows Update, Microsoft Defender and winget), in one native Windows 11 app without terminal windows. It creates a System Restore point first, runs tools in an order that avoids known failures, recognizes and fixes 15 common failures, checks the PC's health in plain words, and shows where the disk space went.
+> Raikasa is a free, open-source (MIT) Windows maintenance app by Luka Stojiljković. It cleans up, repairs and updates a PC with the tools Windows already has (DISM, SFC, chkdsk, Windows Update, Microsoft Defender and winget), in one native Windows 11 app without terminal windows. It creates a System Restore point first, runs tools in an order that avoids known failures, recognizes and fixes 15 common failures, checks the PC's health in plain words, and shows where the disk space went.
 
 Key facts:
 
@@ -16,16 +16,16 @@ Key facts:
 
 ## Download
 
-- [Latest release](https://github.com/lukastojiljkovic/Refreshify/releases/latest): Windows installer, with its SHA-256 hash and build provenance in the release notes
+- [Latest release](https://github.com/lukastojiljkovic/Raikasa/releases/latest): Windows installer, with its SHA-256 hash and build provenance in the release notes
 
 ## Documentation
 
-- [README](https://raw.githubusercontent.com/lukastojiljkovic/Refreshify/main/README.md): every tool, how it works, verification, limitations and building from source
-- [Changelog](https://raw.githubusercontent.com/lukastojiljkovic/Refreshify/main/CHANGELOG.md)
-- [Privacy statement](https://raw.githubusercontent.com/lukastojiljkovic/Refreshify/main/PRIVACY.md)
-- [Terms of use](https://raw.githubusercontent.com/lukastojiljkovic/Refreshify/main/TERMS.md)
+- [README](https://raw.githubusercontent.com/lukastojiljkovic/Raikasa/main/README.md): every tool, how it works, verification, limitations and building from source
+- [Changelog](https://raw.githubusercontent.com/lukastojiljkovic/Raikasa/main/CHANGELOG.md)
+- [Privacy statement](https://raw.githubusercontent.com/lukastojiljkovic/Raikasa/main/PRIVACY.md)
+- [Terms of use](https://raw.githubusercontent.com/lukastojiljkovic/Raikasa/main/TERMS.md)
 
 ## Optional
 
-- [Source code](https://github.com/lukastojiljkovic/Refreshify)
+- [Source code](https://github.com/lukastojiljkovic/Raikasa)
 - [Author's portfolio](https://lukastojiljkovic.github.io/CV/)

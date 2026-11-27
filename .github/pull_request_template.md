@@ -8,7 +8,7 @@
 
 ## Checklist
 
-- [ ] `dotnet format Refreshify.slnx --verify-no-changes` passes
-- [ ] `dotnet test --project tests/Refreshify.Core.Tests` passes, and new behavior has a test
+- [ ] `dotnet format Raikasa.slnx --verify-no-changes` passes
+- [ ] `dotnet test --project tests/Raikasa.Core.Tests` passes, and new behavior has a test
 - [ ] UI text is in plain English, and shows only measured numbers
 - [ ] CHANGELOG.md has a line under *Unreleased* for anything users notice

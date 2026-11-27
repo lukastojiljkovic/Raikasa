@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Refreshify are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/),
+All notable changes to Raikasa are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
@@ -89,7 +89,7 @@ The first release.
 - An optional reminder to refresh your PC every 1, 2, 3 or 6 months.
 - Light and dark themes that follow Windows, or a theme you choose.
 
-[Unreleased]: https://github.com/lukastojiljkovic/Refreshify/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/lukastojiljkovic/Raikasa/compare/v2.0.0...HEAD
 [2.0.0]: https://github.com/lukastojiljkovic/Refreshify/compare/v1.2.1...v2.0.0
 [1.2.1]: https://github.com/lukastojiljkovic/Refreshify/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/lukastojiljkovic/Refreshify/compare/v1.1.0...v1.2.0

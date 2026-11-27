@@ -1,34 +1,34 @@
 <p align="center">
-  <img src="src/Refreshify/Assets/AppIcon.png" width="96" alt="">
+  <img src="src/Raikasa/Assets/AppIcon.png" width="96" alt="">
 </p>
 
-<h1 align="center">Refreshify</h1>
+<h1 align="center">Raikasa</h1>
 
 <p align="center">
-  Give Windows a refresh. Refreshify cleans up, repairs and updates your PC with the tools Windows already has, in one
+  Give Windows a refresh. Raikasa cleans up, repairs and updates your PC with the tools Windows already has, in one
   native Windows 11 app, without a single terminal window.
 </p>
 
 <p align="center">
-  <a href="https://github.com/lukastojiljkovic/Refreshify/actions/workflows/ci.yml"><img src="https://github.com/lukastojiljkovic/Refreshify/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/lukastojiljkovic/Refreshify/releases/latest"><img src="https://img.shields.io/github/v/release/lukastojiljkovic/Refreshify" alt="Latest release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/lukastojiljkovic/Refreshify" alt="MIT License"></a>
+  <a href="https://github.com/lukastojiljkovic/Raikasa/actions/workflows/ci.yml"><img src="https://github.com/lukastojiljkovic/Raikasa/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/lukastojiljkovic/Raikasa/releases/latest"><img src="https://img.shields.io/github/v/release/lukastojiljkovic/Raikasa" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/lukastojiljkovic/Raikasa" alt="MIT License"></a>
 </p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/home-dark.png">
-  <img src="docs/images/home-light.png" alt="Refreshify's home page">
+  <img src="docs/images/home-light.png" alt="Raikasa's home page">
 </picture>
 
 ## Download
 
-Download `Refreshify-<version>-Setup.exe` from the [latest release](https://github.com/lukastojiljkovic/Refreshify/releases/latest).
+Download `Raikasa-<version>-Setup.exe` from the [latest release](https://github.com/lukastojiljkovic/Raikasa/releases/latest).
 
 - **Requirements:** Windows 11, or Windows 10 version 1809 or later, x64. Nothing else to install.
-- **Administrator approval.** Setup installs to Program Files. Refreshify starts its own exe as administrator for the
+- **Administrator approval.** Setup installs to Program Files. Raikasa starts its own exe as administrator for the
   tools that need it, so it must live where only administrators can replace it.
 - **SmartScreen.** The installer isn't code-signed yet, so Windows may warn you. Check that the file's SHA-256 matches
-  the one in the release notes (`Get-FileHash .\Refreshify-<version>-Setup.exe`), then select **More info** >
+  the one in the release notes (`Get-FileHash .\Raikasa-<version>-Setup.exe`), then select **More info** >
   **Run anyway**.
 
 ## Features
@@ -36,13 +36,13 @@ Download `Refreshify-<version>-Setup.exe` from the [latest release](https://gith
 - **Run all** runs the tools you choose, in an order that avoids known failures. Or run a category, or a single tool.
 - **Plain language.** Every tool says what it does, and troubleshooting tools say when to use them. You see what each
   step is doing, how long it takes and what it found, never a terminal.
-- **Safe by default.** Refreshify lists what a run will do before it starts, and creates a System Restore point first.
-- **Known problems, fixed.** Refreshify recognizes 15 common failures, explains them and fixes the ones it safely can,
+- **Safe by default.** Raikasa lists what a run will do before it starts, and creates a System Restore point first.
+- **Known problems, fixed.** Raikasa recognizes 15 common failures, explains them and fixes the ones it safely can,
   such as a damaged Windows Update cache or a disabled repair service. It asks first before fixes that change more.
 - **Health** looks at your PC and says how it is doing, in plain words: free space on each drive, the health your
   drives report, battery wear, whether a restart is waiting, how long since the last restart, virus protection, the
   last Windows update and whether Windows is activated. Each check says what it found and what to do, and where
-  Refreshify has a tool for it, a button opens that tool. Home shows a line when something needs attention. Nothing is
+  Raikasa has a tool for it, a button opens that tool. Home shows a line when something needs attention. Nothing is
   changed, and it needs no administrator approval.
 - **Disk space** scans your files or a drive and lists the folders and files that take the most space, largest first,
   each with its size and its share of the folder. Select a folder to go into it, or switch to **Largest files** to see
@@ -52,7 +52,7 @@ Download `Refreshify-<version>-Setup.exe` from the [latest release](https://gith
   your user name, computer name and profile folder hidden by default.
 - **History** keeps the results of the last 50 runs, with how long they took and the space they freed, and **technical
   details** show each command and its output.
-- **Readable updates.** Refreshify checks GitHub for a newer release when it starts, at most once a day, and shows what
+- **Readable updates.** Raikasa checks GitHub for a newer release when it starts, at most once a day, and shows what
   changed in plain words before you update. It verifies the installer against the SHA-256 checksum published with the
   release, installs it, and then shows what changed in the new version. The automatic check can be turned off.
 - **A reminder**, if you want one, to refresh your PC every 1, 2, 3 or 6 months.
@@ -99,16 +99,16 @@ you run them when you notice the problem they describe, or add them to *Run all*
 
 ## How it works
 
-- **Hidden processes.** Refreshify runs Windows' own tools (DISM, SFC, chkdsk, winget, PowerShell cmdlets and the
+- **Hidden processes.** Raikasa runs Windows' own tools (DISM, SFC, chkdsk, winget, PowerShell cmdlets and the
   Windows Update Agent API) without windows, reads their progress and results, and shows them in the app. Cleanups run
-  in Refreshify itself, skip files that are in use and never follow junctions or symbolic links.
+  in Raikasa itself, skip files that are in use and never follow junctions or symbolic links.
 - **One approval per session.** Tools that need administrator rights run in an elevated helper, started the first time
-  one runs, so Windows asks once. The helper runs only the tools in Refreshify's catalog and talks to the window over a
+  one runs, so Windows asks once. The helper runs only the tools in Raikasa's catalog and talks to the window over a
   named pipe that only the two of them can use.
 - **A safe order.** *Run all* creates the restore point first, then runs Cleanup, Repair, Network, Updates & security
   and Troubleshooting. Cleanup comes first because DISM and Windows Update need free space, Repair comes before updates
   because a damaged component store makes them fail, and DISM always runs before SFC.
-- **Language-independent detection.** Refreshify recognizes problems from exit codes, error codes, `CBS.log` and
+- **Language-independent detection.** Raikasa recognizes problems from exit codes, error codes, `CBS.log` and
   `DISM /English`, never from console text, so it works the same in every Windows language.
 - **A read-only look.** **Health** reads the state of your PC as it is: free space, what your drives report, battery,
   restart state, virus protection, the last update and activation. It changes nothing, needs no administrator
@@ -122,7 +122,7 @@ you run them when you notice the problem they describe, or add them to *Run all*
 
 ## Verification
 
-- **Unit tests:** `dotnet test --project tests/Refreshify.Core.Tests` runs 338 tests. They cover the tool catalog, the
+- **Unit tests:** `dotnet test --project tests/Raikasa.Core.Tests` runs 338 tests. They cover the tool catalog, the
   parsers for DISM, SFC, chkdsk, winget and Windows Update results, known-problem detection, cleanups on real files
   (age filter, files in use, junctions), the run engine (order, fixes, retries, declined elevation and cancellation),
   the Get help report and its redaction, the elevated helper's protocol over a real named pipe, the release-notes
@@ -137,7 +137,7 @@ you run them when you notice the problem they describe, or add them to *Run all*
 
 These tools need your approval in a UAC prompt, which automation can't give, so they're checked by hand:
 
-1. Install Refreshify, open **Settings** and turn on **Show technical details**.
+1. Install Raikasa, open **Settings** and turn on **Show technical details**.
 2. On **Home**, select **Run all**, then **Run**, and approve the UAC prompt once.
 3. Check that each step ends with a result, and that a step that needs attention explains why and offers a fix or
    **Get help**. **Technical details** show every command and what it printed.
@@ -147,11 +147,11 @@ These tools need your approval in a UAC prompt, which automation can't give, so 
 
 ## Limitations
 
-- Refreshify can only fix what Windows' own tools can fix, and results depend on them and the services they use.
+- Raikasa can only fix what Windows' own tools can fix, and results depend on them and the services they use.
 - System image repair downloads from Windows Update. On PCs whose updates are managed by an organization, it may need a
-  Windows installation image (ISO) of the same version and language instead, which Refreshify lets you choose.
+  Windows installation image (ISO) of the same version and language instead, which Raikasa lets you choose.
 - Disk check scans while Windows runs. Problems that need exclusive access are repaired at the next restart, which
-  Refreshify can schedule.
+  Raikasa can schedule.
 - Windows Update installs available updates; optional updates and updates that need your input are left for Settings.
 - App updates only covers apps that winget knows, and apps that are open may not update until you close them.
 - The Defender tools are skipped when another antivirus protects your PC.
@@ -163,7 +163,7 @@ These tools need your approval in a UAC prompt, which automation can't give, so 
   online take no space on this PC, so they aren't counted. Junctions and symbolic links aren't followed, and folders
   more than 512 levels deep are counted as unreadable. For a whole drive, the page also reports the space Windows says
   is used that the scan couldn't count, such as other users' files and system files.
-- Refreshify is x64 only and in English. It has been tested on Windows 11 25H2; Windows 10 hasn't been tested.
+- Raikasa is x64 only and in English. It has been tested on Windows 11 25H2; Windows 10 hasn't been tested.
 - Uninstalling removes the settings, history and reminder of the account that runs the uninstaller.
 
 ## Building
@@ -172,9 +172,9 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), a
 [Inno Setup 6](https://jrsoftware.org/isinfo.php) for the installer (`winget install JRSoftware.InnoSetup`).
 
 ```powershell
-dotnet test --project tests/Refreshify.Core.Tests    # unit tests
-dotnet run --project src/Refreshify -p:Platform=x64   # run the app
-.\build.ps1                                           # tests, publish, licenses and artifacts\installer\Refreshify-<version>-Setup.exe
+dotnet test --project tests/Raikasa.Core.Tests    # unit tests
+dotnet run --project src/Raikasa -p:Platform=x64   # run the app
+.\build.ps1                                           # tests, publish, licenses and artifacts\installer\Raikasa-<version>-Setup.exe
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the rules the code follows and how to add a tool.
@@ -182,29 +182,29 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the rules the code follows and how to
 ## Project structure
 
 ```text
-src/Refreshify.Core          All logic, no UI: the tool catalog, tools, process runner, parsers, run engine, known
+src/Raikasa.Core          All logic, no UI: the tool catalog, tools, process runner, parsers, run engine, known
                              problems, Get help report, Health checks, disk-space scan, release notes, elevated
                              helper protocol and history
-src/Refreshify               WinUI 3 app; the same exe hosts the elevated helper (--worker) and the reminder (--reminder)
-tests/Refreshify.Core.Tests  Unit tests (xUnit v3)
-installer/Refreshify.iss     Inno Setup script
+src/Raikasa               WinUI 3 app; the same exe hosts the elevated helper (--worker) and the reminder (--reminder)
+tests/Raikasa.Core.Tests  Unit tests (xUnit v3)
+installer/Raikasa.iss     Inno Setup script
 docs/ARCHITECTURE.md         Design and behaviour
 ```
 
 ## Legal
 
 - [Terms of Use](TERMS.md), which Setup asks you to accept
-- [Privacy Statement](PRIVACY.md): Refreshify doesn't collect or send personal data; the only request it makes itself is
+- [Privacy Statement](PRIVACY.md): Raikasa doesn't collect or send personal data; the only request it makes itself is
   the update check against GitHub. **Health** and **Disk space** read your PC, and nothing they read leaves it
 - [Third-Party Notices](THIRD-PARTY-NOTICES.md)
 - [Security Policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md): how to build, test and add a tool
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Support](SUPPORT.md): where to ask
-- [Product](PRODUCT.md): what Refreshify is for and who it is for
+- [Product](PRODUCT.md): what Raikasa is for and who it is for
 - [Design](DESIGN.md): the visual design system
 
-Windows is a trademark of the Microsoft group of companies. Refreshify isn't affiliated with or endorsed by Microsoft.
+Windows is a trademark of the Microsoft group of companies. Raikasa isn't affiliated with or endorsed by Microsoft.
 
 ## License
 

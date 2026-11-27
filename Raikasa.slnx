@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Raikasa.Core/Raikasa.Core.csproj" />
+    <Project Path="src/Raikasa/Raikasa.csproj">
+      <Platform Solution="*|Any CPU" Project="x64" />
+    </Project>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Raikasa.Core.Tests/Raikasa.Core.Tests.csproj" />
+  </Folder>
+</Solution>

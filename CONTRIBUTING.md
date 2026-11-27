@@ -1,4 +1,4 @@
-# Contributing to Refreshify
+# Contributing to Raikasa
 
 Thanks for helping. Bug reports, fixes and new tools are welcome.
 
@@ -15,9 +15,9 @@ You need Windows 10 version 1809 or later and the [.NET 10 SDK](https://dotnet.m
 The installer also needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`).
 
 ```powershell
-dotnet test --project tests/Refreshify.Core.Tests            # unit tests
-dotnet run --project src/Refreshify -p:Platform=x64           # WinUI projects need an explicit platform
-dotnet format Refreshify.slnx --verify-no-changes             # the CI format check
+dotnet test --project tests/Raikasa.Core.Tests            # unit tests
+dotnet run --project src/Raikasa -p:Platform=x64           # WinUI projects need an explicit platform
+dotnet format Raikasa.slnx --verify-no-changes             # the CI format check
 .\build.ps1                                                   # tests, publish, licenses and the installer
 ```
 
@@ -37,19 +37,19 @@ Tools that need administrator rights ask for approval in a UAC prompt the first 
 
 ## Adding a tool
 
-1. Add it to `src/Refreshify.Core/Catalog/ToolCatalog.cs`: its category, description, the technical command, whether
+1. Add it to `src/Raikasa.Core/Catalog/ToolCatalog.cs`: its category, description, the technical command, whether
    it needs administrator rights, whether *Run all* includes it by default, and its traits (for example, it takes a
    while or needs the internet).
-2. Reuse a tool type from `src/Refreshify.Core/Tools`, such as `CommandTool`, `CleanupTool` or `ScriptTool`, or add one.
-3. Map the failures you know how to explain or fix to `src/Refreshify.Core/Diagnostics/KnownIssues.cs`.
+2. Reuse a tool type from `src/Raikasa.Core/Tools`, such as `CommandTool`, `CleanupTool` or `ScriptTool`, or add one.
+3. Map the failures you know how to explain or fix to `src/Raikasa.Core/Diagnostics/KnownIssues.cs`.
 4. Add tests: the catalog tests check every entry, and parsers and error mapping get their own tests.
 
 ## Pull requests
 
 - Keep a pull request to one change, and describe what it changes and how you tested it.
 - The format check, the tests and the build must pass. CI runs them on every pull request.
-- Add a line to the *Unreleased* section of [CHANGELOG.md](CHANGELOG.md) for anything users notice. Refreshify shows
+- Add a line to the *Unreleased* section of [CHANGELOG.md](CHANGELOG.md) for anything users notice. Raikasa shows
   these lines in its update dialogs, so write each one as the user would describe the change, not as the code does:
-  "Refreshify tells you when a new version is out", not "Added UpdateService".
+  "Raikasa tells you when a new version is out", not "Added UpdateService".
 
 By contributing, you agree that your contribution is licensed under the [MIT License](LICENSE).
