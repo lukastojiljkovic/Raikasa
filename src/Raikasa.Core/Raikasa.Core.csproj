@@ -5,6 +5,8 @@
     <AssemblyName>$(ProductName).Core</AssemblyName>
     <RootNamespace>$(ProductName).Core</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Restored for win-x64 as well, so packages.lock.json is the same whether the app publishes with -r win-x64 or the tests restore without it. -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
