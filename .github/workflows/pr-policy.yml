@@ -1,0 +1,257 @@
+# Pull request policy: commits, title, changelog, repository hygiene, the mutation
+# ratchet, and the public prose and links of every repository.
+# Template: knowledge/engineering-standard.md, sections 3.9, 5 and 7. Every repository.
+#
+# The scripts live in .github/scripts and carry their own tests, which run here
+# first: a policy gate that has never been seen failing is not a gate.
+#
+# The ruleset requires one check from this file: "Policy" (the last job), the
+# aggregate of the two jobs above it (section 3.0). Before revision 4 "Policy" was the
+# rules job itself; the docs job was added beside it (round 3, R3-B1), and the
+# aggregate keeps the required name, so no ruleset changes.
+#
+# Rewritten 2026-11-18 for the approach of 2026-11-18 (PG-D27). harden-runner runs as
+# security.yml's header describes (CV-D58, PG-D28, PG-D14): on public repositories,
+# Linux jobs only, egress-policy block, disable-telemetry true, and per-job endpoint
+# lists, worked out from each job's downloads (inference) and proved by the first run
+# in block mode. Never audit mode, which uploads the job's events to StepSecurity.
+
+name: PR policy
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions: {}
+
+concurrency:
+  group: pr-policy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  rules:
+    name: Commits, changelog, hygiene and ratchet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }}
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; setup-node, when Node 24 is not in the runner's tool cache: its
+          # version manifest and the Node archive (inference)
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            raw.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            nodejs.org:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # The glob, in quotes so that Node expands it: Node 24's test runner reads a folder
+      # argument as a module to import and fails with MODULE_NOT_FOUND (cross-pollination P-39).
+      - name: Test the policy scripts
+        run: node --test ".github/scripts/test/*.test.mjs"
+
+      # Untrusted text (title, labels, logins) reaches the scripts through env only,
+      # never through ${{ }} inside run:, which would be a script injection.
+      - name: Commits and title
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          if [ "$AUTHOR" = "$OWNER" ] || [ "$AUTHOR" = "dependabot[bot]" ]; then
+            node .github/scripts/check-commits.mjs --base "$BASE" --head "$HEAD" --title "$TITLE" --identity strict
+          else
+            # An outside contribution: the owner's identity rule does not apply, the DCO does.
+            node .github/scripts/check-commits.mjs --base "$BASE" --head "$HEAD" --title "$TITLE" --identity off --require-signoff
+          fi
+
+      - name: Changelog
+        if: ${{ !cancelled() }}
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: node .github/scripts/check-changelog.mjs --base "$BASE" --head "$HEAD" --title "$TITLE" --labels "$LABELS"
+
+      - name: Repository hygiene
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-hygiene.mjs --profile app
+
+      # The mutation ratchet only rises (engineering standard, section 7.3): a pull
+      # request that lowers .github/mutation-ratchet.json, or removes a key, fails.
+      - name: Mutation ratchet is not lowered
+        if: ${{ !cancelled() }}
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node .github/scripts/mutation-gate.mjs guard --base "$BASE" --head "$HEAD"
+
+  docs:
+    # Everything public about the program is English, neutral and professional (brief
+    # `000000000.`, R14), so every repository checks its public Markdown on every pull
+    # request, whatever its stack (section 3.9; round 3, R3-B1): Vale with the Microsoft
+    # package and the program vocabulary (.vale.ini), markdownlint-cli2
+    # (.markdownlint-cli2.jsonc), and lychee on internal links and anchors. check-docs.mjs
+    # also reads the list with micromark, so that each e-mail autolink is still a link on
+    # the page and each Vale switch is closed on its own line (B0-U02, inspectors 7 and 8).
+    #
+    # The set is one list, built from what git tracks: the root Markdown files, docs/
+    # and .github/. At the root, CODE_OF_CONDUCT.md (the Contributor Covenant, adopted
+    # verbatim) and THIRD-PARTY-NOTICES*.md (generated from third-party texts:
+    # THIRD-PARTY-NOTICES.md and the per-installer files that `generate-notices.mjs
+    # --installer` writes, such as THIRD-PARTY-NOTICES.x64.md) are left out, because
+    # their wording is not ours to change. internal/ is never tracked (check-hygiene.mjs),
+    # so it is never in the list. A public document elsewhere belongs under docs/.
+    # External links are checked at night (nightly.yml), because they break without a
+    # commit here. Sites check their built pages in ci-site.yml or the site kit.
+    name: Public prose and links
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }}
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; setup-node as in the rules job; npm's registry for npm ci; the
+          # Vale and lychee release archives and the Vale package `vale sync` fetches
+          # from GitHub (inference). lychee runs --offline.
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            raw.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            nodejs.org:443
+            registry.npmjs.org:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # npm ci fails when package-lock.json is missing or disagrees with package.json.
+      - name: Install markdownlint-cli2 from its lockfile
+        working-directory: .github/docs-tools
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install Vale
+        env:
+          VERSION: "3.26.0"
+          SHA256: "22aa69a556558e4a9dfc63c17030777383d8d3c48dcdfad655fa98e839d666ed"
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/vale.tar.gz" \
+            "https://github.com/errata-ai/vale/releases/download/v${VERSION}/vale_${VERSION}_Linux_64-bit.tar.gz"
+          echo "${SHA256}  $RUNNER_TEMP/vale.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/vale.tar.gz" -C "$RUNNER_TEMP" vale
+          "$RUNNER_TEMP/vale" --version
+
+      # The archive holds the binary in a folder (listed with tar -tzf on 2026-11-06), so
+      # that one member is extracted flat, as in ci-site.yml (B3).
+      - name: Install lychee
+        env:
+          VERSION: "0.24.2"
+          SHA256: "1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a"
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/lychee.tar.gz" \
+            "https://github.com/lycheeverse/lychee/releases/download/lychee-v${VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${SHA256}  $RUNNER_TEMP/lychee.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/lychee.tar.gz" -C "$RUNNER_TEMP" --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
+          "$RUNNER_TEMP/lychee" --version
+
+      # One list for the four checks, written to a file so each step reads the same set.
+      # README.md is required by the hygiene rules, so an empty list means the pathspecs
+      # are wrong, and the step fails rather than checking nothing.
+      - name: List the public Markdown
+        shell: bash
+        run: |
+          git ls-files -z -- ':(glob)*.md' ':(glob)docs/**/*.md' ':(glob).github/**/*.md' \
+            ':(exclude)CODE_OF_CONDUCT.md' ':(exclude,glob)THIRD-PARTY-NOTICES*.md' > "$RUNNER_TEMP/docs.list"
+          count="$(tr -cd '\0' < "$RUNNER_TEMP/docs.list" | wc -c)"
+          if [ "$count" -eq 0 ]; then echo "::error::no public Markdown found; README.md is required"; exit 1; fi
+          echo "Checking $count files:"; tr '\0' '\n' < "$RUNNER_TEMP/docs.list"
+
+      - name: English prose (Vale)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          mapfile -d '' files < "$RUNNER_TEMP/docs.list"
+          "$RUNNER_TEMP/vale" sync
+          "$RUNNER_TEMP/vale" --minAlertLevel=warning "${files[@]}"
+
+      - name: Markdown (markdownlint)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          mapfile -d '' files < "$RUNNER_TEMP/docs.list"
+          .github/docs-tools/node_modules/.bin/markdownlint-cli2 "${files[@]}"
+
+      # check-docs.mjs reads every file of the list with micromark, markdownlint's
+      # CommonMark parser, from this job's install: an e-mail autolink after a comment
+      # that begins its line is raw HTML, not a link, and a Vale switch left open hides
+      # the rest of the file. Its tests need the same install, so they are outside the
+      # rules job's glob and run here; without DOCS_TOOLS they fail rather than skip.
+      # The test file is named, not globbed: a glob that matches nothing passes with 0
+      # tests, a missing named file fails (Node 24.22.1 and 26.13.0, 2026-11-26).
+      - name: E-mail links and Vale switches
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          DOCS_TOOLS: .github/docs-tools
+        run: |
+          node --test .github/scripts/test-docs/check-docs.test.mjs
+          mapfile -d '' files < "$RUNNER_TEMP/docs.list"
+          node .github/scripts/check-docs.mjs --tools "$DOCS_TOOLS" "${files[@]}"
+
+      # --offline checks local files only, with every network link excluded rather than
+      # failed; --include-fragments=anchor-only also checks `#section` anchors, and
+      # --root-dir resolves links that start with "/" (lychee 0.24.2's README).
+      - name: Internal links and anchors (lychee)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          mapfile -d '' files < "$RUNNER_TEMP/docs.list"
+          "$RUNNER_TEMP/lychee" --offline --include-fragments=anchor-only --root-dir "$PWD" --no-progress "${files[@]}"
+
+  gate:
+    # The one check the ruleset requires from this workflow (see ci-dotnet.yml's gate).
+    name: Policy
+    if: ${{ always() }}
+    needs: [rules, docs]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every policy passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          bad="$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key)=\(.value.result)"' <<<"$RESULTS")"
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+          if [ -n "$bad" ]; then echo "::error::not green: $(paste -sd ' ' - <<<"$bad")"; exit 1; fi
+          echo "Every policy passed."

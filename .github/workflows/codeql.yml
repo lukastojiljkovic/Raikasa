@@ -1,3 +1,32 @@
+# CodeQL code scanning. Template: engineering-standard.md, section 4.
+# Rewritten 2026-11-18 for the approach of 2026-11-18 (PG-D27).
+#
+# CodeQL runs only on public repositories under an OSI-approved licence (PG-D5). The
+# CodeQL CLI's licence allows analysis "only with an Open Source Codebase", "a codebase
+# that is released under an OSI-approved License" (T1 R12; CV-D15). So:
+#   - a repository under the `reserved` profile, such as the CV, deletes this file and
+#     its .github/codeql/ folder (CV-D15, PG-D28);
+#   - a private repository keeps the file, but the job is skipped while it is private
+#     and starts by itself the day it becomes public. Code scanning also needs GitHub
+#     Code Security on a private repository
+#     (https://github.com/github/docs/blob/main/data/reusables/gated-features/code-scanning.md).
+#     Until then it relies on the Semgrep rules committed in .semgrep/, never the
+#     registry's packs (PG-D5, CV-D17), and the compensating controls of
+#     engineering-standard.md, section 4.1.
+#
+# The languages are `actions`, which scans the workflows themselves, and `csharp`, built by hand
+# (`build-mode: manual`) so that source-generated code (LibraryImport, GeneratedRegex, System.Text.Json
+# source generation, x:Bind) is analysed too.
+#
+# harden-runner (CV-D58, decided for every repository by the engineering standard on
+# PG-D28's referral; PG-D14): the visibility job and the Linux legs of `analyze` start
+# with it, in block mode with telemetry off; the windows-2025 leg carries none, because
+# its free tier allows audit mode only there (the step tests runner.os). The analyze
+# step tests the visibility job's output, so it also runs on the weekly schedule. Its
+# endpoint list covers the Linux leg (inference: the CodeQL bundle and query packs); the first
+# block-mode run's log names any endpoint it still needs. If block mode cannot be made to pass, the step is left
+# out, and the SHA pins, zizmor and gitleaks keep the supply-chain checks (CV-D58).
+
 name: CodeQL
 
 on:
@@ -5,40 +34,113 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: '27 4 * * 1'
+    - cron: "41 4 * * 2" # weekly: a new query can find something in unchanged code
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: codeql-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  visibility:
+    # A scheduled run has no event payload ("Not applicable" in GitHub's events
+    # reference), so github.event.repository is empty there and a test on it would let
+    # this workflow run on a private repository. The API answers on every event.
+    name: Repository visibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      public: ${{ steps.v.outputs.public }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }} # false on a schedule, whose payload has no repository
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # the visibility query (inference)
+          allowed-endpoints: >
+            api.github.com:443
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # no GitHub CLI telemetry (PG-D14, G-26 A): gh sends sampled telemetry by default since 2026-04 (cli/cli internal/telemetry/telemetry.go)
+          GH_TELEMETRY: "0"
+        # Assigned first, so a failed API call fails the step (bash -e) instead of writing an
+        # empty `public=` that would skip the analysis without an error.
+        run: |
+          v="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility == "public"')"
+          echo "public=$v" >> "$GITHUB_OUTPUT"
+
   analyze:
     name: Analyze (${{ matrix.language }})
+    needs: [visibility]
+    if: ${{ needs.visibility.outputs.public == 'true' }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       actions: read
       contents: read
       security-events: write
+    env:
+      # no .NET CLI telemetry (PG-D14; as ci.yml)
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      # no PowerShell telemetry (PG-D14): the csharp leg runs on windows-2025, whose steps use pwsh by default
+      POWERSHELL_TELEMETRY_OPTOUT: "1"
     strategy:
       fail-fast: false
       matrix:
         include:
-          - language: csharp
-            os: windows-latest
-          - language: actions
-            os: ubuntu-latest
+          - { language: actions, os: ubuntu-24.04, build-mode: none }
+          - { language: csharp, os: windows-2025, build-mode: manual }
     steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ runner.os == 'Linux' && needs.visibility.outputs.public == 'true' }}
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; the CodeQL bundle and its query packs; the SARIF upload (inference)
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            uploads.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            ghcr.io:443
+            pkg-containers.githubusercontent.com:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - if: matrix.language == 'csharp'
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
 
+      - if: matrix.language == 'csharp'
+        uses: ./.github/actions/product # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+
+      - if: matrix.language == 'csharp'
+        shell: bash
+        run: dotnet restore "$SOLUTION" --locked-mode
+
       - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           languages: ${{ matrix.language }}
-          build-mode: none
+          build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
+
+      # The solution is built as a whole, restored before the analysis starts so that the traced build needs no
+      # network, and without the incremental cache so that every file is compiled (and so analysed).
+      - if: matrix.build-mode == 'manual'
+        shell: bash
+        run: |
+          dotnet build "$SOLUTION" -c Release --no-restore --no-incremental -p:UseSharedCompilation=false
 
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:

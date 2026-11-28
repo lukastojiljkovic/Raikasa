@@ -41,7 +41,7 @@
                 "name": "Raikasa",
                 "description": "Windows maintenance app that cleans up, repairs and updates a PC with the tools Windows already has (DISM, SFC, chkdsk, Windows Update, Microsoft Defender and winget), in a safe order after a System Restore point, recognizes and fixes 15 common failures, checks the PC's health, and shows where its disk space went.",
                 "applicationCategory": "UtilitiesApplication",
-                "operatingSystem": "Windows 11, Windows 10 version 1809 or later",
+                "operatingSystem": "Windows 11",
                 "url": "https://lukastojiljkovic.github.io/Raikasa/",
                 "downloadUrl": "https://github.com/lukastojiljkovic/Raikasa/releases/latest",
                 "screenshot": "https://lukastojiljkovic.github.io/Raikasa/images/home-light.png",
@@ -56,7 +56,7 @@
                 "mainEntity": [
                     { "@type": "Question", "name": "Is Raikasa free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Raikasa is free and open source under the MIT License. It has no ads, accounts or telemetry." } },
                     { "@type": "Question", "name": "Is it safe to run on my PC?", "acceptedAnswer": { "@type": "Answer", "text": "Raikasa only runs maintenance tools that come with Windows, plus winget. It lists what a run will do before it starts and creates a System Restore point first, skipped when one from the last 24 hours exists. A restore point covers system files, settings and programs, not personal files." } },
-                    { "@type": "Question", "name": "Does Raikasa work on Windows 10?", "acceptedAnswer": { "@type": "Answer", "text": "It runs on Windows 10 version 1809 or later, x64, but it has only been tested on Windows 11 25H2." } },
+                    { "@type": "Question", "name": "Does Raikasa work on Windows 10?", "acceptedAnswer": { "@type": "Answer", "text": "It is built and tested for Windows 11, x64, and has been tested on Windows 11 25H2. Windows 10 is not supported." } },
                     { "@type": "Question", "name": "Why does it ask for administrator approval?", "acceptedAnswer": { "@type": "Answer", "text": "Repair and update tools need administrator rights. Raikasa runs them in an elevated helper that starts the first time one of them runs, so Windows asks once per session." } },
                     { "@type": "Question", "name": "Does Raikasa collect any data?", "acceptedAnswer": { "@type": "Answer", "text": "No. Raikasa collects nothing. The only request it makes itself is the update check, which asks GitHub for the latest release and sends nothing but its version number. The Windows tools it runs, such as Windows Update, Microsoft Defender and winget, connect to Microsoft and app publishers as they do when you run them yourself. See the privacy statement." } },
                     { "@type": "Question", "name": "Why does Windows SmartScreen warn about the installer?", "acceptedAnswer": { "@type": "Answer", "text": "The installer isn't code-signed yet. Check that its SHA-256 hash matches the one in the release notes (Get-FileHash in PowerShell), then choose More info and Run anyway." } },
@@ -96,7 +96,7 @@
 
         <div class="get-it">
             <p class="free">Free and open source</p>
-            <p class="where">MIT License. Windows 11, or Windows 10 1809+, x64.</p>
+            <p class="where">MIT License. Windows 11, x64.</p>
             <div class="band-actions">
                 <a class="btn btn-app" href="https://github.com/lukastojiljkovic/Raikasa/releases/latest">Download for Windows</a>
                 <a class="btn btn-line" href="https://github.com/lukastojiljkovic/Raikasa">View the source</a>
@@ -220,7 +220,7 @@
         <div class="faq">
             <details><summary>Is Raikasa free?</summary><p>Yes. Raikasa is free and open source under the <a href="https://github.com/lukastojiljkovic/Raikasa/blob/main/LICENSE">MIT License</a>. It has no ads, accounts or telemetry.</p></details>
             <details><summary>Is it safe to run on my PC?</summary><p>Raikasa only runs maintenance tools that come with Windows, plus winget. It lists what a run will do before it starts and creates a System Restore point first, skipped when one from the last 24 hours exists. A restore point covers system files, settings and programs, not personal files.</p></details>
-            <details><summary>Does Raikasa work on Windows 10?</summary><p>It runs on Windows 10 version 1809 or later, x64, but it has only been tested on Windows 11 25H2.</p></details>
+            <details><summary>Does Raikasa work on Windows 10?</summary><p>It is built and tested for Windows 11, x64, and has been tested on Windows 11 25H2. Windows 10 is not supported.</p></details>
             <details><summary>Why does it ask for administrator approval?</summary><p>Repair and update tools need administrator rights. Raikasa runs them in an elevated helper that starts the first time one of them runs, so Windows asks once per session.</p></details>
             <details><summary>Does Raikasa collect any data?</summary><p>No. Raikasa collects nothing. The only request it makes itself is the update check, which asks GitHub for the latest release and sends nothing but its version number. The Windows tools it runs, such as Windows Update, Microsoft Defender and winget, connect to Microsoft and app publishers as they do when you run them yourself. See the <a href="https://github.com/lukastojiljkovic/Raikasa/blob/main/PRIVACY.md">privacy statement</a>.</p></details>
             <details><summary>Why does Windows SmartScreen warn about the installer?</summary><p>The installer isn't code-signed yet. Check that its SHA-256 hash matches the one in the <a href="https://github.com/lukastojiljkovic/Raikasa/releases/latest">release notes</a> (<code>Get-FileHash</code> in PowerShell), then choose <b>More info</b> and <b>Run anyway</b>.</p></details>
@@ -243,7 +243,7 @@
             </div>
         </div>
         <dl class="get-facts">
-            <div><dt>Requires</dt><dd>Windows 11, or Windows 10 version 1809 or later, x64</dd></div>
+            <div><dt>Requires</dt><dd>Windows 11, x64</dd></div>
             <div><dt>Language</dt><dd>English</dd></div>
             <div><dt>License</dt><dd>MIT, source on GitHub</dd></div>
             <div><dt>Verify</dt><dd>SHA-256 and build provenance in the release notes</dd></div>

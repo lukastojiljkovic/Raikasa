@@ -1,0 +1,156 @@
+# Cut from .github/workflows/ci-electron.yml for check-hygiene.test.mjs, telemetry (5) (B0-U01): the template's file
+# without its header comment and without its jobs audit, licences, mutation, red-green, fuzz-build, perf, package,
+# ui-gates, gate. Every other line is the template's, unchanged. The test "telemetry (5)'s fixtures are cut from the
+# template's own files" compares it with that file; cut it again when the file changes.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call: # nightly.yml runs the whole CI again
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # no Turborepo telemetry (PG-D14): Nexus's scripts run turbo, whose telemetry is on by default, in CI too
+  # (turborepo-telemetry config.rs is_disabled_by_env: DO_NOT_TRACK or TURBO_TELEMETRY_DISABLED set to 1 or true)
+  DO_NOT_TRACK: "1"
+  TURBO_TELEMETRY_DISABLED: "1"
+  # no PowerShell telemetry (PG-D14): this file sets no defaults.run.shell, so on the windows-2025 legs of e2e
+  # and package every run: step without shell: runs under the runner's default, pwsh (actions/runner
+  # ScriptHandler.cs), which sends telemetry unless this is set (PowerShell Telemetry.cs: "true, yes, or 1")
+  POWERSHELL_TELEMETRY_OPTOUT: "1"
+
+jobs:
+  verify:
+    name: Typecheck, lint, unit tests, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1" # no Electron binary is needed to typecheck
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }} # false on a schedule, whose payload has no repository
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            codeload.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            registry.npmjs.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # One step per gate, so a red run names the rule that broke.
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm exec knip # unused files, exports and dependencies
+      # Toxiproxy on 127.0.0.1:8474 and TOXIPROXY_URL for the slow-network tests (section
+      # 10.1; round 3, R3-B2), which are ordinary Vitest tests of the run below.
+      - uses: ./.github/actions/toxiproxy # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      - run: pnpm test -- --coverage --reporter=default --reporter=junit --outputFile.junit=junit.xml
+      # Every product has an updater (R4) and so has slow-network tests: the updater and
+      # every download (Nexus's content packs and the installer's Electron fetch, PG-D37) behind a Toxiproxy proxy with
+      # bandwidth, latency, reset_peer, timeout and limit_data toxics (section 10.1). They
+      # live in files named *.slow-network.test.ts, and Vitest's JUnit report names each
+      # case's file in `classname`. A run in which none ran means they were renamed or
+      # filtered away, and fails.
+      - name: The slow-network tests ran
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          n="$(grep -o '<testcase [^>]*>' junit.xml | grep -c 'classname="[^"]*\.slow-network\.test\.' || true)"
+          echo "slow-network test cases: $n"
+          if [ "$n" -eq 0 ]; then echo "::error::no test of a *.slow-network.test.ts file ran (section 10.1, slow networks)"; exit 1; fi
+      - run: pnpm build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: unit-results
+          path: |
+            junit.xml
+            coverage/
+          retention-days: 14
+
+  e2e:
+    name: End-to-end, screenshots, accessibility (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Private repositories: macOS on main, at night and before a release, not on
+        # each pull request (section 10, spend caps). Public: all three always.
+        os: ${{ fromJSON(github.event.repository.private && github.event_name == 'pull_request' && '["windows-2025","ubuntu-24.04"]' || '["windows-2025","ubuntu-24.04","macos-15"]') }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ runner.os == 'Linux' && github.event.repository.visibility == 'public' }} # false on a schedule, whose payload has no repository
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            codeload.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            registry.npmjs.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # Playwright drives the real Electron app (_electron.launch). Baseline
+      # screenshots are committed per platform (Playwright suffixes them -win32,
+      # -linux, -darwin); a difference fails and the diff is uploaded below.
+      - if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum pnpm e2e
+      - if: runner.os != 'Linux'
+        run: pnpm e2e
+      # CI never writes a baseline (section 7.2).
+      - name: No baseline was written
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          changed="$(git status --porcelain --untracked-files=all -- ':(glob)**/*-snapshots/**')"
+          if [ -n "$changed" ]; then echo "::error::a test wrote a baseline in CI:"; echo "$changed"; exit 1; fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: e2e-${{ matrix.os }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+

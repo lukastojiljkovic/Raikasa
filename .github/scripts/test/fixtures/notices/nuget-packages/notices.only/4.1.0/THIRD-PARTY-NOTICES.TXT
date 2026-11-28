@@ -1,0 +1,1 @@
+Notices.Only third-party notices (fixture text). This file is not a licence text.

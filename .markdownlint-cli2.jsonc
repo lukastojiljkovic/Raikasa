@@ -1,0 +1,10 @@
+{
+  // markdownlint rules for README, CHANGELOG and docs/.
+  "config": {
+    "default": true,
+    "MD013": false, // line length: prose is wrapped by editors, not by a column count
+    "MD024": { "siblings_only": true }, // Keep a Changelog repeats "### Added" per version
+    "MD033": { "allowed_elements": ["img", "picture", "source", "br", "details", "summary"] }
+  },
+  "ignores": ["node_modules/**", "internal/**", "target/**", "**/bin/**", "**/obj/**"]
+}

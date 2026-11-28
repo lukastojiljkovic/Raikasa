@@ -1,0 +1,4 @@
+# Pinned licence texts are kept byte for byte: no line-ending change and no text
+# conversion, whatever the repository's root rule says (PG-D3, PG-D10). Each text
+# is pinned by SHA-256 in ../licence-policy.json, and two of them use CRLF.
+* -text

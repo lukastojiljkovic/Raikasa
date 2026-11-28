@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "notices/bundled-components.json",
+  "description": "The inventory of every shipped component that is not a package of a package manager (S-13; P-34). .github/scripts/generate-notices.mjs validates the inventory against this file with its own small validator, which understands exactly the keywords used here: type, enum, const, pattern, minLength, minItems, required, properties, additionalProperties, items, $ref, oneOf and uniqueItems. Keep to those keywords when changing this file.",
+  "type": "object",
+  "required": ["schemaVersion", "components"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "components": { "type": "array", "items": { "$ref": "#/$defs/component" } }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "text": { "type": "string", "minLength": 1 },
+    "component": {
+      "type": "object",
+      "required": ["id", "component", "version", "source", "ships", "files", "licence", "noticeTexts", "obligations", "gplVerdict"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "component": { "$ref": "#/$defs/text" },
+        "version": { "$ref": "#/$defs/text" },
+        "source": {
+          "description": "Where the component was taken from: a URL, a tag or commit, and the SHA-256 of every artifact taken from it. For a copyleft component, upstreamSource is also its upstream source location (P-34).",
+          "type": "object",
+          "required": ["url", "ref", "artifacts"],
+          "additionalProperties": false,
+          "properties": {
+            "url": { "$ref": "#/$defs/text" },
+            "ref": { "$ref": "#/$defs/text" },
+            "upstreamSource": { "$ref": "#/$defs/text" },
+            "artifacts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "sha256"],
+                "additionalProperties": false,
+                "properties": { "name": { "$ref": "#/$defs/text" }, "sha256": { "$ref": "#/$defs/sha256" } }
+              }
+            }
+          }
+        },
+        "ships": {
+          "description": "Where the component ships. package is the unit that carries it: the word installer marks the installer, anything else is free text such as crate:app-ui. architecture is x64, arm64 or any; --installer <name> keeps a component whose ships hold that architecture or any.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["package", "architecture", "location"],
+            "additionalProperties": false,
+            "properties": {
+              "package": { "$ref": "#/$defs/text" },
+              "architecture": { "enum": ["x64", "arm64", "any"] },
+              "location": { "$ref": "#/$defs/text" }
+            }
+          }
+        },
+        "files": {
+          "description": "Each shipped file or embedded resource: its SHA-256, or, for a file a tool generates, the attribution rule that covers it (Notices_EveryShippedFileAttributed).",
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["path", "sha256"],
+                "additionalProperties": false,
+                "properties": { "path": { "$ref": "#/$defs/text" }, "sha256": { "$ref": "#/$defs/sha256" } }
+              },
+              {
+                "type": "object",
+                "required": ["path", "attribution"],
+                "additionalProperties": false,
+                "properties": { "path": { "$ref": "#/$defs/text" }, "attribution": { "$ref": "#/$defs/text" } }
+              }
+            ]
+          }
+        },
+        "licence": { "description": "An SPDX licence expression, such as OFL-1.1 or Apache-2.0 WITH LLVM-exception; a LicenseRef- id for a licence that has no SPDX id. The generator checks that it parses as one.", "$ref": "#/$defs/text" },
+        "noticeTexts": {
+          "description": "The component's own notice and licence files at the pinned version. archiveUrl and archiveSha256 name the source archive, path is the file's place inside it, sha256 is the file's own hash, and file is the verbatim copy the build's fetch step extracted (relative to this inventory's folder). The generator reads file, fails when it no longer hashes to sha256, and writes it verbatim.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["archiveUrl", "archiveSha256", "path", "sha256", "file"],
+            "additionalProperties": false,
+            "properties": {
+              "archiveUrl": { "$ref": "#/$defs/text" },
+              "archiveSha256": { "$ref": "#/$defs/sha256" },
+              "path": { "$ref": "#/$defs/text" },
+              "sha256": { "$ref": "#/$defs/sha256" },
+              "file": { "$ref": "#/$defs/text" }
+            }
+          }
+        },
+        "contains": {
+          "description": "Statically linked or compiled-in sub-components, with the same fields.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/component" }
+        },
+        "obligations": {
+          "description": "notice and licence-copy need at least one noticeTexts entry; source-offer and relink need sourceAssets; about-line needs aboutLine (inspection R3-N8).",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["notice", "licence-copy", "source-offer", "relink", "about-line"] }
+        },
+        "aboutLine": { "$ref": "#/$defs/text" },
+        "gplVerdict": {
+          "description": "How the component stands to the GPL program, with its source.",
+          "type": "object",
+          "required": ["verdict", "source"],
+          "additionalProperties": false,
+          "properties": { "verdict": { "$ref": "#/$defs/text" }, "source": { "$ref": "#/$defs/text" } }
+        },
+        "sourceAssets": {
+          "description": "For source-offer: the release asset names and SHA-256 of the corresponding source.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "sha256"],
+            "additionalProperties": false,
+            "properties": { "name": { "$ref": "#/$defs/text" }, "sha256": { "$ref": "#/$defs/sha256" } }
+          }
+        }
+      }
+    }
+  }
+}

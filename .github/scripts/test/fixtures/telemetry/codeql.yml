@@ -1,0 +1,130 @@
+# Cut from .github/workflows/codeql.yml for check-hygiene.test.mjs, telemetry (5) (B0-U01): the template's file
+# without its header comment. Every other line is the template's, unchanged. The test "telemetry (5)'s fixtures are
+# cut from the template's own files" compares it with that file; cut it again when the file changes.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "41 4 * * 2" # weekly: a new query can find something in unchanged code
+
+permissions: {}
+
+concurrency:
+  group: codeql-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  visibility:
+    # A scheduled run has no event payload ("Not applicable" in GitHub's events
+    # reference), so github.event.repository is empty there and a test on it would let
+    # this workflow run on a private repository. The API answers on every event.
+    name: Repository visibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      public: ${{ steps.v.outputs.public }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }} # false on a schedule, whose payload has no repository
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # the visibility query (inference)
+          allowed-endpoints: >
+            api.github.com:443
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # no GitHub CLI telemetry (PG-D14, G-26 A): gh sends sampled telemetry by default since 2026-04 (cli/cli internal/telemetry/telemetry.go)
+          GH_TELEMETRY: "0"
+        # Assigned first, so a failed API call fails the step (bash -e) instead of writing an
+        # empty `public=` that would skip the analysis without an error.
+        run: |
+          v="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility == "public"')"
+          echo "public=$v" >> "$GITHUB_OUTPUT"
+
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    needs: [visibility]
+    if: ${{ needs.visibility.outputs.public == 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    env:
+      # no .NET CLI telemetry (PG-D14; as ci-dotnet.yml): the csharp leg may call the dotnet
+      # CLI (inference). Delete both lines with the csharp entry.
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      # no PowerShell telemetry (PG-D14): on the windows-2025 csharp leg a run: step without
+      # shell: runs under the runner's default, pwsh. Today the job's one run: step is the
+      # java-kotlin build, so this guards a step added later. Delete it with the csharp entry.
+      POWERSHELL_TELEMETRY_OPTOUT: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { language: actions, os: ubuntu-24.04, build-mode: none }
+          - { language: csharp, os: windows-2025, build-mode: none }
+          - { language: rust, os: ubuntu-24.04, build-mode: none }
+          - { language: javascript-typescript, os: ubuntu-24.04, build-mode: none }
+          - { language: python, os: ubuntu-24.04, build-mode: none }
+          # Kotlin is analysed from a build; `none` covers Java sources only.
+          - { language: java-kotlin, os: ubuntu-24.04, build-mode: manual }
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ runner.os == 'Linux' && needs.visibility.outputs.public == 'true' }}
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; the CodeQL bundle and its query packs; the SARIF upload; Temurin
+          # and Gradle with its repositories for java-kotlin (inference)
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            uploads.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            ghcr.io:443
+            pkg-containers.githubusercontent.com:443
+            api.adoptium.net:443
+            services.gradle.org:443
+            downloads.gradle.org:443
+            plugins.gradle.org:443
+            plugins-artifacts.gradle.org:443
+            repo.maven.apache.org:443
+            repo1.maven.org:443
+            maven.google.com:443
+            dl.google.com:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - if: matrix.build-mode == 'manual'
+        run: ./gradlew --no-daemon assembleDebug
+
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}

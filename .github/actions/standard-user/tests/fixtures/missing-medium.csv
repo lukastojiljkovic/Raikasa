@@ -1,0 +1,5 @@
+"Everyone","Well-known group","S-1-1-0","Mandatory group, Enabled by default, Enabled group"
+"BUILTIN\Users","Alias","S-1-5-32-545","Mandatory group, Enabled by default, Enabled group"
+"NT AUTHORITY\INTERACTIVE","Well-known group","S-1-5-4","Mandatory group, Enabled by default, Enabled group"
+"NT AUTHORITY\Authenticated Users","Well-known group","S-1-5-11","Mandatory group, Enabled by default, Enabled group"
+"LOCAL","Well-known group","S-1-2-0","Mandatory group, Enabled by default, Enabled group"

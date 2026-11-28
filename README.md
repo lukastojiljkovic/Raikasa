@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD033 MD041 -->
 <p align="center">
   <img src="src/Raikasa/Assets/AppIcon.png" width="96" alt="">
 </p>
@@ -24,7 +25,7 @@
 
 Download `Raikasa-<version>-Setup.exe` from the [latest release](https://github.com/lukastojiljkovic/Raikasa/releases/latest).
 
-- **Requirements:** Windows 11, or Windows 10 version 1809 or later, x64. Nothing else to install.
+- **Requirements:** Windows 11, x64. Nothing else to install.
 - **Administrator approval.** Setup installs to Program Files. Raikasa starts its own exe as administrator for the
   tools that need it, so it must live where only administrators can replace it.
 - **SmartScreen.** The installer isn't code-signed yet, so Windows may warn you. Check that the file's SHA-256 matches
@@ -163,13 +164,13 @@ These tools need your approval in a UAC prompt, which automation can't give, so 
   online take no space on this PC, so they aren't counted. Junctions and symbolic links aren't followed, and folders
   more than 512 levels deep are counted as unreadable. For a whole drive, the page also reports the space Windows says
   is used that the scan couldn't count, such as other users' files and system files.
-- Raikasa is x64 only and in English. It has been tested on Windows 11 25H2; Windows 10 hasn't been tested.
+- Raikasa is x64 only and in English. It runs on Windows 11 and has been tested on 25H2.
 - Uninstalling removes the settings, history and reminder of the account that runs the uninstaller.
 
 ## Building
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and
-[Inno Setup 6](https://jrsoftware.org/isinfo.php) for the installer (`winget install JRSoftware.InnoSetup`).
+You need [the .NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and
+[Inno Setup 7.1.1](https://jrsoftware.org/isdl.php) for the installer, from the vendor (per user, or set `ISCC` to its `ISCC.exe`).
 
 ```powershell
 dotnet test --project tests/Raikasa.Core.Tests    # unit tests
@@ -198,13 +199,14 @@ docs/ARCHITECTURE.md         Design and behaviour
   the update check against GitHub. **Health** and **Disk space** read your PC, and nothing they read leaves it
 - [Third-Party Notices](THIRD-PARTY-NOTICES.md)
 - [Security Policy](SECURITY.md)
+- [Threat model](docs/threat-model.md): what the app protects and what the tests check
 - [Contributing](CONTRIBUTING.md): how to build, test and add a tool
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Support](SUPPORT.md): where to ask
 - [Product](PRODUCT.md): what Raikasa is for and who it is for
 - [Design](DESIGN.md): the visual design system
 
-Windows is a trademark of the Microsoft group of companies. Raikasa isn't affiliated with or endorsed by Microsoft.
+Trademarks: see [TRADEMARKS.md](TRADEMARKS.md). Windows is a trademark of the Microsoft group of companies. Raikasa isn't affiliated with or endorsed by Microsoft.
 
 ## License
 

@@ -1,3 +1,14 @@
+<!--
+  Repository-wide MSBuild settings.
+
+  The product name and the version are spelled here and nowhere else; the code, build.ps1, the installer script and the
+  workflows read them from this file.
+
+  Publish shape: this release ships on the self-contained WinUI composition it already has, so SelfContainedTransition
+  is true. That lifts the SelfContained and WindowsAppSDKSelfContained checks of the guard at the end of this file only.
+  PublishAot and PublishSingleFile still fail the build: a single-file bundle carries runtime files under the .NET Library
+  License, and Native AOT links with Microsoft's linker and libraries.
+-->
 <Project>
   <PropertyGroup>
     <Version>2.0.0</Version>
@@ -5,9 +16,40 @@
     <Product>$(ProductName)</Product>
     <Authors>Luka Stojiljkovic</Authors>
     <Copyright>Copyright © 2026 Luka Stojiljkovic</Copyright>
+    <SelfContainedTransition>true</SelfContainedTransition>
+
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- Reproducible restores: packages.lock.json is committed, CI restores locked. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+
+    <!-- NuGet audit over the whole graph at every severity
+         (https://learn.microsoft.com/en-us/nuget/concepts/auditing-packages).
+         Advisories are warnings locally, so a new advisory never blocks unrelated
+         work at a bad moment, and errors in the CI audit job (AuditPipeline=true). -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+    <NuGetAuditCodes>NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</NuGetAuditCodes>
+    <WarningsAsErrors Condition="'$(AuditPipeline)' == 'true'">$(WarningsAsErrors);$(NuGetAuditCodes)</WarningsAsErrors>
+    <WarningsNotAsErrors Condition="'$(AuditPipeline)' != 'true'">$(WarningsNotAsErrors);$(NuGetAuditCodes)</WarningsNotAsErrors>
   </PropertyGroup>
+
+  <!-- The publish-shape guard. It runs before every build and every publish, so a property set in a .csproj, a publish
+       profile or on the command line is caught. -->
+  <Target Name="ProductPublishShapeGuard" BeforeTargets="PrepareForBuild;PrepareForPublish">
+    <Error Condition="'$(PublishAot)' == 'true'"
+           Text="PublishAot is not allowed: Native AOT links with Microsoft's linker and libraries." />
+    <Error Condition="'$(PublishSingleFile)' == 'true'"
+           Text="PublishSingleFile is not allowed: a single-file bundle carries runtime files under the .NET Library License." />
+    <Error Condition="'$(SelfContained)' == 'true' and '$(SelfContainedTransition)' != 'true'"
+           Text="SelfContained is not allowed outside this release's transition." />
+    <Error Condition="'$(WindowsAppSDKSelfContained)' == 'true' and '$(SelfContainedTransition)' != 'true'"
+           Text="WindowsAppSDKSelfContained is not allowed outside this release's transition." />
+  </Target>
 </Project>

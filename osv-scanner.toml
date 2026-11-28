@@ -1,0 +1,59 @@
+# Advisories osv-scanner must not count, each with its reason and an expiry date, so
+# an accepted risk is raised again for review. Empty is the normal state.
+#
+# [[IgnoredVulns]]
+# id = "GHSA-xxxx-xxxx-xxxx"
+# ignoreUntil = 2027-01-01T00:00:00Z
+# reason = "Reached only through <tool> at build time; not shipped; no patched version upstream."
+
+# Semgrep 1.184.0 (the locked tree in .github/ci-tools/uv.lock) pins these three libraries
+# exactly (mcp==1.29.0, opentelemetry-api~=1.37.0, wcmatch~=8.3), and the newest releases of
+# Semgrep keep the same pins, so the fixed versions cannot be locked beside it. The job runs
+# `semgrep scan` with `--metrics=off` over this repository's own tracked files: no MCP client or
+# server, no OpenTelemetry exporter and no outside input reach these code paths.
+[[IgnoredVulns]]
+id = "GHSA-84m7-p3x7-pcfv"
+ignoreUntil = 2027-01-15T00:00:00Z
+reason = "mcp 1.29.0, pinned by Semgrep: the StreamableHTTP server transport, which `semgrep scan` never starts."
+
+[[IgnoredVulns]]
+id = "GHSA-qx49-fqc8-xw99"
+ignoreUntil = 2027-01-15T00:00:00Z
+reason = "mcp 1.29.0, pinned by Semgrep: the MCP OAuth client, which `semgrep scan` never starts."
+
+[[IgnoredVulns]]
+id = "GHSA-5h93-6whr-6q8j"
+ignoreUntil = 2027-01-15T00:00:00Z
+reason = "mcp 1.29.0, pinned by Semgrep: the MCP HTTP client transports, which `semgrep scan` never starts."
+
+[[IgnoredVulns]]
+id = "GHSA-rwrf-2pqf-9j8j"
+ignoreUntil = 2027-01-15T00:00:00Z
+reason = "mcp 1.29.0, pinned by Semgrep: the MCP client's output-schema validation, which `semgrep scan` never starts."
+
+[[IgnoredVulns]]
+id = "GHSA-w4fh-qvv9-3v23"
+ignoreUntil = 2027-01-15T00:00:00Z
+reason = "mcp 1.29.0, pinned by Semgrep: the MCP server's bearer-token check, which `semgrep scan` never starts."
+
+[[IgnoredVulns]]
+id = "GHSA-mf5v-w3w3-f6cg"
+ignoreUntil = 2027-01-15T00:00:00Z
+reason = "opentelemetry-api 1.37.0, pinned by Semgrep: parses a traceparent header, which no request of this job carries (metrics are off)."
+
+[[IgnoredVulns]]
+id = "GHSA-xcq7-p3pf-p88h"
+ignoreUntil = 2027-01-15T00:00:00Z
+reason = "opentelemetry-api 1.37.0, pinned by Semgrep: parses a tracestate header, which no request of this job carries (metrics are off)."
+
+[[IgnoredVulns]]
+id = "GHSA-53pm-wgxf-c6qf"
+ignoreUntil = 2027-01-15T00:00:00Z
+reason = "wcmatch 8.5.2, pinned by Semgrep: slow matching of a crafted path against a multi-star pattern; the paths are this repository's own tracked files and the patterns are its own ignore rules."
+
+# markdownlint-cli2 (.github/docs-tools/package-lock.json) reaches KaTeX through micromark-extension-math, which
+# only parses Markdown math; no page is rendered, so the trust settings of KaTeX's renderer are never used.
+[[IgnoredVulns]]
+id = "GHSA-238p-pmpm-9mq7"
+ignoreUntil = 2027-01-15T00:00:00Z
+reason = "katex 0.16.47 in the docs lint tool: KaTeX's renderer is never called; markdownlint only parses the Markdown."

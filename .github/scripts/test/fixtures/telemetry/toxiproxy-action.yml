@@ -1,0 +1,62 @@
+# Cut from .github/actions/toxiproxy/action.yml for check-hygiene.test.mjs, telemetry (5) (B0-U01): the template's
+# file without its header comment. Every other line is the template's, unchanged. The test "telemetry (5)'s fixtures
+# are cut from the template's own files" compares it with that file; cut it again when the file changes.
+
+name: Start Toxiproxy
+description: Starts a checksum-verified Toxiproxy 2.13.0 server on loopback and exports TOXIPROXY_URL.
+
+runs:
+  using: composite
+  steps:
+    - name: Download and verify toxiproxy-server 2.13.0
+      shell: bash
+      env:
+        RUNNER_OS_NAME: ${{ runner.os }}
+        RUNNER_ARCH_NAME: ${{ runner.arch }}
+      run: |
+        case "$RUNNER_OS_NAME/$RUNNER_ARCH_NAME" in
+          Linux/X64)   asset=toxiproxy-server-linux-amd64;       sha=bf529e8bb9a05cd293f45a3f1d0aa66ff9469680dcdca7e0ebeae21f1b83de89 ;;
+          Linux/ARM64) asset=toxiproxy-server-linux-arm64;       sha=9a7e2db359153772f26f9382adf5cd7305ee9d4cb2d4956922b5df38fe16c37e ;;
+          macOS/ARM64) asset=toxiproxy-server-darwin-arm64;      sha=21e5d0cbfc4af6e9967f617ee7a1645fa26181220fee3961630311a8de14705c ;;
+          macOS/X64)   asset=toxiproxy-server-darwin-amd64;      sha=d41cf6ce269a3ea113461e54139881f901955ed11dabb60861217b69a4c8176f ;;
+          Windows/X64) asset=toxiproxy-server-windows-amd64.exe; sha=04b710eefd7690c89f7cc67289e3e14618f1ff3c26e4a5f752a34a879b895bab ;;
+          *) echo "::error::no pinned Toxiproxy build for $RUNNER_OS_NAME/$RUNNER_ARCH_NAME"; exit 1 ;;
+        esac
+        bin="$RUNNER_TEMP/toxiproxy-server"
+        if [ "$RUNNER_OS_NAME" = "Windows" ]; then bin="$bin.exe"; fi
+        curl -sSfL -o "$bin" "https://github.com/Shopify/toxiproxy/releases/download/v2.13.0/$asset"
+        if command -v sha256sum >/dev/null; then got="$(sha256sum "$bin" | cut -d' ' -f1)"; else got="$(shasum -a 256 "$bin" | cut -d' ' -f1)"; fi
+        if [ "$got" != "$sha" ]; then echo "::error::$asset SHA-256 is $got, expected $sha"; exit 1; fi
+        chmod +x "$bin"
+        # The path is not exported: the start steps rebuild it from RUNNER_TEMP. A value read from a
+        # shell variable written to GITHUB_ENV is what zizmor's github-env audit reports.
+
+    - name: Start the server (Linux, macOS)
+      if: ${{ runner.os != 'Windows' }}
+      shell: bash
+      run: nohup "$RUNNER_TEMP/toxiproxy-server" -host 127.0.0.1 -port 8474 -seed 1 > "$RUNNER_TEMP/toxiproxy.log" 2>&1 &
+
+    - name: Start the server (Windows)
+      if: ${{ runner.os == 'Windows' }}
+      shell: pwsh
+      run: |
+        Start-Process -FilePath (Join-Path $env:RUNNER_TEMP 'toxiproxy-server.exe') -ArgumentList '-host', '127.0.0.1', '-port', '8474', '-seed', '1' `
+          -RedirectStandardOutput (Join-Path $env:RUNNER_TEMP 'toxiproxy.log') `
+          -RedirectStandardError (Join-Path $env:RUNNER_TEMP 'toxiproxy.err.log')
+
+    # The server must answer, and be the version pinned above, before any test starts.
+    - name: Wait for the API and export TOXIPROXY_URL
+      shell: bash
+      run: |
+        for _ in $(seq 1 30); do
+          if version="$(curl -sf http://127.0.0.1:8474/version)"; then
+            echo "Toxiproxy answers: $version"
+            case "$version" in *2.13.0*) ;; *) echo "::error::unexpected Toxiproxy version: $version"; exit 1 ;; esac
+            echo "TOXIPROXY_URL=http://127.0.0.1:8474" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "::error::Toxiproxy did not answer on 127.0.0.1:8474 within 30 seconds"
+        cat "$RUNNER_TEMP"/toxiproxy*.log || true
+        exit 1

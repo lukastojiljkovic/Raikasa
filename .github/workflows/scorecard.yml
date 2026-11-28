@@ -1,0 +1,125 @@
+# OpenSSF Scorecard. Template: engineering-standard.md, section 4.
+# Rewritten 2026-11-18 for the approach of 2026-11-18 (PG-D27).
+# Public repositories only: it reads public settings and publishes the score.
+#
+# A repository under the `reserved` profile, such as the CV, leaves out the last step
+# (github/codeql-action/upload-sarif) and keeps the SARIF only as the workflow artifact
+# and in the job log: no upload to GitHub code scanning (CV-D16, PG-D28). publish_results
+# stays.
+#
+# harden-runner (CV-D58, decided for every repository by the engineering standard on
+# PG-D28's referral; PG-D14): both jobs start with it, in block mode with telemetry off
+# and a per-job endpoint list. The analysis step tests the visibility job's output, so it
+# also runs on the weekly schedule, whose event has no repository. The endpoint lists
+# are a first set (inference): the scorecard-action image comes from ghcr.io, and its
+# checks and publish_results reach the hosts listed; the first block-mode run's log
+# names any endpoint the job still needs. If block mode cannot be made to pass, the step
+# is left out of that job, and the SHA pins, zizmor and gitleaks keep the supply-chain
+# checks (CV-D58).
+
+name: Scorecard
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: "23 6 * * 3"
+  push:
+    branches: [main]
+
+permissions: {}
+
+# One run at a time, none cancelled: a push, the weekly run and a protection change would
+# otherwise publish concurrently. scorecard-action restricts only env, defaults and
+# permissions at workflow level, not concurrency (its README, Workflow Restrictions, read
+# at the pinned SHA 2026-11-18).
+concurrency:
+  group: scorecard
+  cancel-in-progress: false
+
+jobs:
+  visibility:
+    # A scheduled run has no event payload ("Not applicable" in GitHub's events
+    # reference), so github.event.repository is empty there and a test on it would let
+    # this workflow run on a private repository. The API answers on every event.
+    name: Repository visibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      public: ${{ steps.v.outputs.public }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }} # false on a schedule, whose payload has no repository
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # the visibility query (inference)
+          allowed-endpoints: >
+            api.github.com:443
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # no GitHub CLI telemetry (PG-D14, G-26 A): gh sends sampled telemetry by default since 2026-04 (cli/cli internal/telemetry/telemetry.go).
+          # Step level on purpose: scorecard-action forbids workflow-level env, and the analysis job that runs it may carry no job env (its README, Workflow Restrictions, at the pinned SHA).
+          GH_TELEMETRY: "0"
+        # Assigned first, so a failed API call fails the step (bash -e) instead of writing an
+        # empty `public=` that would skip the analysis without an error.
+        run: |
+          v="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility == "public"')"
+          echo "public=$v" >> "$GITHUB_OUTPUT"
+
+  analysis:
+    name: Scorecard analysis
+    needs: [visibility]
+    if: ${{ needs.visibility.outputs.public == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      security-events: write
+      id-token: write # publish_results proves the result came from this workflow
+      contents: read
+      actions: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ needs.visibility.outputs.public == 'true' }}
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; the action's image; the GitHub API the checks read; OSV, deps.dev,
+          # the OpenSSF best-practices badge and OSS-Fuzz's build list; publish_results'
+          # Sigstore signature and the Scorecard API; the artifact and SARIF uploads
+          # (inference)
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            pkg-containers.githubusercontent.com:443
+            api.osv.dev:443
+            api.deps.dev:443
+            www.bestpractices.dev:443
+            oss-fuzz-build-logs.storage.googleapis.com:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
+            api.scorecard.dev:443
+            api.securityscorecards.dev:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: scorecard.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scorecard
+          path: scorecard.sarif
+          retention-days: 7
+      # Left out in reserved repositories (CV-D16; see the header).
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: scorecard.sarif

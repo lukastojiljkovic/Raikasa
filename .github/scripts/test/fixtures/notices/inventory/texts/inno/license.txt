@@ -1,0 +1,2 @@
+﻿Inno Setup License (fixture text)
+Copyright (C) 1997-2026 Jordan Russell. All rights reserved.

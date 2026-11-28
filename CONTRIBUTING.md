@@ -11,8 +11,8 @@ Thanks for helping. Bug reports, fixes and new tools are welcome.
 
 ## Building
 
-You need Windows 10 version 1809 or later and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
-The installer also needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`).
+You need Windows 11 and [the .NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+The installer also needs [Inno Setup 7.1.1](https://jrsoftware.org/isdl.php), installed per user from the vendor's download (or set `ISCC` to its `ISCC.exe`); `build.ps1` refuses any other version.
 
 ```powershell
 dotnet test --project tests/Raikasa.Core.Tests            # unit tests

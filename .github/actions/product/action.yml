@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: MIT
+#
+# Reads the product name from Directory.Build.props (`ProductName`, the one place that
+# spells it) and exports the paths that follow the repository's naming:
+#   PRODUCT       the product name
+#   SOLUTION      <name>.slnx
+#   CORE_PROJECT  src/<name>.Core/<name>.Core.csproj
+#   PUBLISH_PROJECT  src/<name>/<name>.csproj, the project that ships
+#   TEST_PROJECT  tests/<name>.Core.Tests/<name>.Core.Tests.csproj
+#   FUZZ_PROJECT  fuzz/<name>.Fuzz/<name>.Fuzz.csproj, the SharpFuzz harness
+#   FUZZ_TARGET_DLLS  <name>.Core.dll, the library the harness instruments
+# No workflow or script spells the name, so a rename changes Directory.Build.props and
+# the folders, and nothing here.
+
+name: Product paths
+description: Exports the product name and the solution and project paths that follow from Directory.Build.props.
+
+runs:
+  using: composite
+  steps:
+    - name: Read ProductName
+      shell: bash
+      run: |
+        name="$(sed -n 's:.*<ProductName>\([^<]*\)</ProductName>.*:\1:p' Directory.Build.props | head -n 1)"
+        case "$name" in
+          ''|*[!A-Za-z0-9]*) echo "::error::ProductName in Directory.Build.props is empty or holds a character outside A-Z, a-z and 0-9"; exit 1 ;;
+        esac
+        {
+          echo "PRODUCT=$name"
+          echo "SOLUTION=$name.slnx"
+          echo "CORE_PROJECT=src/$name.Core/$name.Core.csproj"
+          echo "PUBLISH_PROJECT=src/$name/$name.csproj"
+          echo "TEST_PROJECT=tests/$name.Core.Tests/$name.Core.Tests.csproj"
+          echo "FUZZ_PROJECT=fuzz/$name.Fuzz/$name.Fuzz.csproj"
+          echo "FUZZ_TARGET_DLLS=$name.Core.dll"
+        } >> "$GITHUB_ENV"

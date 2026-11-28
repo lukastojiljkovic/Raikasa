@@ -1,9 +1,9 @@
 # Raikasa Terms of Use
 
-Last updated: 5 October 2026
+Last updated: October 5, 2026
 
 These terms apply to the Raikasa application and installer published at
-https://github.com/lukastojiljkovic/Raikasa. Raikasa's source code is licensed under the MIT License (LICENSE).
+<https://github.com/lukastojiljkovic/Raikasa>. Raikasa's source code is licensed under the MIT License (LICENSE).
 Nothing in these terms limits the rights the MIT License gives you for the source code.
 
 By installing or using Raikasa, you agree to these terms. If you don't agree, don't install or use it.
@@ -80,4 +80,4 @@ These terms may change in future releases. The terms included with a release app
 
 ## Contact
 
-Open an issue at https://github.com/lukastojiljkovic/Raikasa/issues.
+Open an issue at <https://github.com/lukastojiljkovic/Raikasa/issues>.

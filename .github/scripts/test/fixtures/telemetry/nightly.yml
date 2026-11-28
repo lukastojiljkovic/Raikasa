@@ -1,0 +1,229 @@
+# Cut from .github/workflows/nightly.yml for check-hygiene.test.mjs, telemetry (5) (B0-U01): the template's file
+# without its header comment and without its jobs mutation-rust, mutation-python, mutation-kotlin, fuzz-rust,
+# fuzz-dotnet, fuzz-js, fuzz-python, fuzz-kotlin, links. Every other line is the template's, with
+# TS_SOURCE_PATHSPECS filled. The test "telemetry (5)'s fixtures are cut from the template's own files" compares it
+# with that file; cut it again when the file changes.
+
+name: Nightly
+
+on:
+  schedule:
+    - cron: "7 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+# A scheduled run and a manual one must not overlap: both write the two tracking issues.
+# The group is not the CI's (`ci-<event>-<ref>`), so the nightly's call to ci.yml never waits
+# on it (N7).
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+env:
+  # no .NET CLI telemetry (PG-D14; as ci-dotnet.yml). The mutation-dotnet and fuzz-dotnet jobs
+  # run dotnet tool install, dotnet publish and Stryker.NET; delete both lines with them.
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  # no GitHub CLI telemetry (PG-D14, G-26 A): gh sends sampled telemetry by default since 2026-04 (cli/cli internal/telemetry/telemetry.go)
+  GH_TELEMETRY: "0"
+  # no PowerShell telemetry (PG-D14): the mutation-rust job runs a `shell: pwsh` step, and it and
+  # mutation-dotnet run the toxiproxy action's Windows start step, on windows-2025
+  # (PowerShell Telemetry.cs: "true, yes, or 1" turns it off)
+  POWERSHELL_TELEMETRY_OPTOUT: "1"
+  # no tool telemetry in the JS jobs (PG-D14): DO_NOT_TRACK is the cross-tool opt-out, which Turborepo
+  # (behind Nexus's pnpm scripts) and gh both honour (turborepo-telemetry config.rs is_disabled_by_env;
+  # cli/cli internal/telemetry/telemetry.go ParseTelemetryState). Delete it with mutation-js and fuzz-js.
+  DO_NOT_TRACK: "1"
+  NIGHTLY: nightly-2026-10-30 # the Rust nightly for cargo-fuzz, as in ci-rust.yml (N9; ledger seq 23)
+  # llvm-mingw for the gnullvm host, as in ci-rust.yml (PG-D10; ledger seq 9).
+  LLVM_MINGW_URL: https://github.com/mstorsjo/llvm-mingw/releases/download/20261104/llvm-mingw-20261104-ucrt-x86_64.zip
+  LLVM_MINGW_SHA256: 552191b5754c49a5a20723276a6fc56541ea1922c4c50b7b669022333fc1b40f
+  LLVM_MINGW_DIR: llvm-mingw-20261104-ucrt-x86_64
+
+jobs:
+  visibility:
+    # A scheduled run has no event payload ("Not applicable" in GitHub's events
+    # reference); the API answers on every event. This job's own harden-runner step can
+    # only test the event, so it runs on a manual run and is skipped on a scheduled one.
+    name: Repository visibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      public: ${{ steps.v.outputs.public }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }} # false on a schedule, whose payload has no repository
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # the visibility query (inference)
+          allowed-endpoints: >
+            api.github.com:443
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Assigned first, so a failed API call fails the step (bash -e) instead of writing an
+        # empty `public=` that would run the jobs below without their harden-runner step.
+        run: |
+          v="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility == "public"')"
+          echo "public=$v" >> "$GITHUB_OUTPUT"
+
+  ci:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711); ci-<stack>.yml, copied in as ci.yml
+
+  mutation-dotnet:
+    # windows-2025: the helper targets net10.0-windows (PG-D39), as in ci-dotnet.yml.
+    runs-on: windows-2025
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash # Git Bash on windows-2025, as in ci-dotnet.yml
+    outputs:
+      floor: ${{ steps.score.outputs.floor }}
+      threshold: ${{ steps.score.outputs.threshold }}
+    steps:
+      # No harden-runner on Windows: its free tier allows audit mode only (CV-D58).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: dotnet tool install dotnet-stryker --version 5.0.0 --tool-path .tools
+      # Stryker runs the whole suite for each mutant, slow-network tests included, as in
+      # ci-dotnet.yml's mutation job.
+      - uses: ./.github/actions/toxiproxy # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      # Stryker.NET refuses break > low and low > high (B1), so high is 100 and low and
+      # break are both the ratchet: valid for every ratchet from 0 to 100.
+      - run: |
+          r="$(jq -r '.percent' .github/mutation-ratchet.json)"
+          .tools/dotnet-stryker --config-file stryker-config.json \
+            --threshold-high 100 --threshold-low "$r" --break-at "$r"
+      # The newest report: StrykerOutput/<yyyy-MM-dd.HH-mm-ss>/, so the last name in glob
+      # order is the newest (a glob array, not ls; R2-B8, SC2012). No report is exit 2.
+      - id: score
+        if: ${{ !cancelled() }}
+        run: |
+          shopt -s nullglob
+          reports=(StrykerOutput/*/reports/mutation-report.json)
+          if [ ${#reports[@]} -eq 0 ]; then echo "::error::Stryker.NET wrote no mutation-report.json"; exit 2; fi
+          node .github/scripts/mutation-gate.mjs score --format stryker --report "${reports[-1]}" --ratchet .github/mutation-ratchet.json
+
+  mutation-js:
+    runs-on: ubuntu-24.04
+    needs: [visibility]
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    outputs:
+      floor: ${{ steps.score.outputs.floor }}
+      threshold: ${{ steps.score.outputs.threshold }}
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ needs.visibility.outputs.public == 'true' }}
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; pnpm and setup-node with its cache; npm's registry (inference)
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            nodejs.org:443
+            codeload.github.com:443
+            registry.npmjs.org:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The committed config has no thresholds (they come from the ratchet file) and no
+      # mutate list: the files come from the same :(glob)src/**/*.ts as the
+      # pull-request job, so a layout with apps/*/src and packages/*/src is mutated whole
+      # and a root src/ never hides the packages (round 2, N28).
+      - shell: bash
+        env:
+          SOURCE_PATHSPECS: ":(glob)src/**/*.ts"
+        run: |
+          read -ra specs <<<"$SOURCE_PATHSPECS"
+          files="$(git ls-files -- "${specs[@]}" | { grep -vE '\.(test|spec)\.tsx?$' || true; } | paste -sd, -)"
+          if [ -z "$files" ]; then echo "::error::TS_SOURCE_PATHSPECS selects no source file"; exit 2; fi
+          r="$(jq -r '.percent' .github/mutation-ratchet.json)"
+          jq --argjson r "$r" '.thresholds = {high: 100, low: $r, break: $r}' stryker.nightly.config.json > .stryker-nightly.json
+          pnpm exec stryker run .stryker-nightly.json --mutate "$files"
+      - id: score
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/mutation-gate.mjs score --format stryker --report reports/mutation/mutation.json --ratchet .github/mutation-ratchet.json
+
+  report:
+    name: Report the night
+    if: ${{ always() }}
+    # Keep this list equal to the jobs left above.
+    needs: [visibility, ci, mutation-dotnet, mutation-rust, mutation-js, mutation-python, mutation-kotlin, fuzz-rust, fuzz-dotnet, fuzz-js, fuzz-python, fuzz-kotlin, links]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ needs.visibility.outputs.public == 'true' }}
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # the issue and label calls of gh (inference)
+          allowed-endpoints: >
+            api.github.com:443
+      # shell: bash is `bash -eo pipefail`: without pipefail, a failed `jq ... | paste` would
+      # leave `failed` empty, report the night green and close the open nightly-failure issue.
+      - shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULTS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # A ratchet to raise: a mutation job measured a floor above its threshold.
+          # (An empty output is truthy in jq, so it is compared as a string first.)
+          raise="$(jq -r 'to_entries[] | select((.value.outputs.floor // "") != "" and (.value.outputs.threshold // "") != "")
+            | select((.value.outputs.floor | tonumber) > (.value.outputs.threshold | tonumber))
+            | "\(.key) measured \(.value.outputs.floor)% against a ratchet of \(.value.outputs.threshold)%"' <<<"$RESULTS" | paste -sd';' -)"
+          gh label create mutation-ratchet -R "$GITHUB_REPOSITORY" --color 0E8A16 --description "Raise .github/mutation-ratchet.json" --force
+          ropen="$(gh issue list -R "$GITHUB_REPOSITORY" --label mutation-ratchet --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$raise" ]; then
+            body="Raise .github/mutation-ratchet.json to the measured floor in a pull request: $raise. Run: $RUN_URL"
+            if [ -n "$ropen" ]; then gh issue comment "$ropen" -R "$GITHUB_REPOSITORY" --body "$body"
+            else gh issue create -R "$GITHUB_REPOSITORY" --title "Raise the mutation ratchet" --label mutation-ratchet --body "$body"; fi
+          elif [ -n "$ropen" ]; then
+            gh issue close "$ropen" -R "$GITHUB_REPOSITORY" --comment "The ratchet equals the measured score: $RUN_URL"
+          fi
+
+          failed="$(jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key' <<<"$RESULTS" | paste -sd, -)"
+          gh label create nightly-failure -R "$GITHUB_REPOSITORY" --color B60205 --description "The nightly sweep failed" --force
+          open="$(gh issue list -R "$GITHUB_REPOSITORY" --label nightly-failure --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$failed" ]; then
+            body="The nightly run failed in: $failed. Run: $RUN_URL"
+            if [ -n "$open" ]; then gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$body"
+            else gh issue create -R "$GITHUB_REPOSITORY" --title "Nightly run failed" --label nightly-failure --body "$body"; fi
+            exit 1
+          elif [ -n "$open" ]; then
+            gh issue close "$open" -R "$GITHUB_REPOSITORY" --comment "The nightly run is green again: $RUN_URL"
+          fi

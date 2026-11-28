@@ -68,10 +68,12 @@ components:
     padding: "32,20,32,24"
 ---
 
+<!-- markdownlint-disable-next-line MD025 -->
 # Design System: Raikasa
 
 ## Overview
 
+<!-- markdownlint-disable-next-line MD036 -->
 **Creative North Star: "One Fluent window, no terminal"**
 
 Raikasa looks like a Windows settings page rather than a custom tool. It is stock WinUI 3: a `MicaBackdrop`, the

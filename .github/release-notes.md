@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD041 -->
 Raikasa cleans up, repairs and updates your PC with the tools Windows already has, in one native Windows 11 app.
 
 ## What's new
@@ -6,7 +7,7 @@ Raikasa cleans up, repairs and updates your PC with the tools Windows already ha
 
 ## Download
 
-**{{FILE}}** for Windows 11, or Windows 10 version 1809 or later, x64.
+**{{FILE}}** for Windows 11, x64.
 
 SHA-256: `{{SHA256}}`
 

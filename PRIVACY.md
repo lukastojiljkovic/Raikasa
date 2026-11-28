@@ -1,6 +1,6 @@
 # Raikasa Privacy Statement
 
-Last updated: 8 October 2026
+Last updated: October 8, 2026
 
 Raikasa doesn't collect or send personal data to its author or anyone else. It has no accounts, telemetry,
 analytics, crash reporting or ads. The only request Raikasa makes on its own is the update check described below.
@@ -47,7 +47,7 @@ The Windows tools Raikasa runs connect to Microsoft and to app publishers, as th
 - **App updates** runs winget, which reads its sources, such as Microsoft's winget and Microsoft Store sources, and
   downloads updates from the apps' publishers.
 
-These connections are governed by the Microsoft Privacy Statement at https://aka.ms/privacy and by the publishers'
+These connections are governed by the Microsoft Privacy Statement at <https://aka.ms/privacy> and by the publishers'
 privacy policies.
 
 ## Update check
@@ -65,8 +65,8 @@ is verified before the installer is started. The automatic check runs at most on
 - **Links** to GitHub, and the update check, use HTTPS; GitHub's privacy statement applies to what GitHub receives.
 - **Microsoft components.** The Microsoft Windows App SDK included with Raikasa may collect diagnostic information
   as described in its license terms (in the `licenses` folder) and the Microsoft Privacy Statement at
-  https://aka.ms/privacy. Any such data goes to Microsoft, not to Raikasa's author.
+  <https://aka.ms/privacy>. Any such data goes to Microsoft, not to Raikasa's author.
 
 ## Contact
 
-Open an issue at https://github.com/lukastojiljkovic/Raikasa/issues.
+Open an issue at <https://github.com/lukastojiljkovic/Raikasa/issues>.

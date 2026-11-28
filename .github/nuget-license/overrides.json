@@ -1,0 +1,37 @@
+[
+  {
+    "Id": "Microsoft.Web.WebView2",
+    "Version": "1.0.3719.77",
+    "License": "BSD-3-Clause"
+  },
+  {
+    "Id": "Microsoft.Windows.SDK.BuildTools",
+    "Version": "10.0.26100.4654",
+    "License": "LicenseRef-Microsoft-WindowsSDK-BuildTools"
+  },
+  {
+    "Id": "Microsoft.Windows.SDK.BuildTools.MSIX",
+    "Version": "1.7.251221100",
+    "License": "LicenseRef-Microsoft-WindowsSDK-BuildTools"
+  },
+  {
+    "Id": "Microsoft.WindowsAppSDK.Base",
+    "Version": "2.0.4",
+    "License": "LicenseRef-Microsoft-WindowsAppSDK"
+  },
+  {
+    "Id": "Microsoft.WindowsAppSDK.Foundation",
+    "Version": "2.3.12",
+    "License": "LicenseRef-Microsoft-WindowsAppSDK"
+  },
+  {
+    "Id": "Microsoft.WindowsAppSDK.InteractiveExperiences",
+    "Version": "2.1.9",
+    "License": "LicenseRef-Microsoft-WindowsAppSDK"
+  },
+  {
+    "Id": "Microsoft.WindowsAppSDK.WinUI",
+    "Version": "2.3.9",
+    "License": "LicenseRef-Microsoft-WindowsAppSDK"
+  }
+]

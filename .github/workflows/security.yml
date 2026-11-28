@@ -1,0 +1,410 @@
+# Security scans that need no GitHub Advanced Security licence, so they run the
+# same on public and private repositories. Template: engineering-standard.md, section 4.
+# Rewritten 2026-11-18 for the approach of 2026-11-18 (PG-D27).
+#
+#   secrets    gitleaks over the whole history and the working tree (every event
+#              scans everything: a range-scoped scan lets a finding expire, as
+#              Nexus learned on 2026-07-31)
+#   deps       osv-scanner over every lockfile in the tree
+#   sast       Semgrep Community Edition with the rules committed in .semgrep/ only,
+#              never the registry's packs, and --metrics=off (PG-D5, CV-D17); with
+#              gitleaks for secrets, the only SAST a private repository has (section 4.1)
+#   workflows  actionlint over .github/workflows; zizmor over the repository's workflows,
+#              composite actions (.github/actions) and .github/dependabot.yml, with
+#              .github/zizmor.yml setting its dependabot-cooldown audit to the program's
+#              5 days
+#
+# Tools that are not actions are pinned by version AND by the SHA-256 of the
+# release archive (gitleaks, actionlint), by install-action's checksummed manifest
+# (osv-scanner), or by a committed lockfile with hashes (Semgrep,
+# .github/ci-tools/uv.lock), so a replaced download fails instead of running (E3 and
+# section 4.5 list the pin of every tool, and of every action that fetches one).
+# gitleaks 8.30.1, actionlint 1.7.12, osv-scanner 2.7.0 and zizmor 1.32.0 are the
+# versions on Luka's PC (ledger seq 24 and 39).
+#
+# harden-runner (CV-D58, decided for every repository by the engineering-standard
+# rewrite under PG-D28 and PG-D14). Every job here runs on Linux and starts with it on
+# public repositories: egress-policy block, disable-telemetry true, and only the
+# endpoints that job needs. Never audit mode: in audit mode the action uploads the
+# job's events to StepSecurity's service. A Windows job carries no harden-runner step.
+# The endpoint lists are worked out from each job's downloads (inference); the
+# runner's own traffic to GitHub's service is not listed. The first run in block mode
+# proves each list: a blocked call fails the job, and its endpoint is added with the
+# step that needs it. If the pinned action's source shows that block mode with
+# telemetry off still contacts StepSecurity, or block mode cannot be made to pass, the
+# step is left out, and the SHA pins, zizmor and gitleaks keep the supply-chain checks
+# (CV-D58, U13).
+#
+# The ruleset requires one check from this file: "Security gate" (the last job).
+
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1" # weekly, Monday 05:17 UTC: new advisories arrive without commits
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: security-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }} # false on a schedule, whose payload has no repository
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; the gitleaks release archive and its download redirect
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install gitleaks
+        env:
+          VERSION: "8.30.1"
+          SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          echo "${SHA256}  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+      # --config is explicit: a wrong path must be an error, not a silent fallback.
+      - name: Scan the whole history
+        run: '"$RUNNER_TEMP/gitleaks" git . --config .gitleaks.toml --redact --verbose --exit-code 1'
+      - name: Scan the working tree
+        if: ${{ !cancelled() }}
+        run: '"$RUNNER_TEMP/gitleaks" dir . --config .gitleaks.toml --redact --verbose --exit-code 1'
+
+  deps:
+    name: Dependency scan (osv-scanner)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }} # false on a schedule, whose payload has no repository
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; install-action's osv-scanner download; the OSV API the scan queries;
+          # deps.dev, which osv-scanner asks for transitive Maven dependencies (inference)
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            api.osv.dev:443
+            api.deps.dev:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: osv-scanner@2.7.0
+      # Every severity fails. An accepted advisory goes into osv-scanner.toml with a
+      # reason and an ignoreUntil date, so the exception expires by itself.
+      #
+      # osv-scanner exits 128 when it finds no file it reads ("No package sources found";
+      # docs/output.md; R2-B2). 128 is accepted only when git tracks no dependency
+      # manifest or lockfile of any ecosystem, so a repository that truly declares
+      # nothing (nexus-packs) passes. --allow-no-lockfiles would turn 128 into exit 0,
+      # but it is not used, because it also passes a lone package.json.
+      # What osv-scanner 2.7.0 reads (measured 2026-11-25, `scan source --recursive
+      # --offline`, one file per folder): a package.json, Cargo.toml or pyproject.toml
+      # alone gives 128, so a repository whose only dependency file is one of those
+      # fails here with the list. A .csproj's PackageReference items, a pom.xml and a
+      # requirements.txt are read ("found 1 package"), so a repository whose only
+      # dependency file is one of those is scanned and never reaches 128 here.
+      # With one lockfile deleted and any other tracked (.github/ci-tools/uv.lock is, in
+      # every adopting repository), osv-scanner scans the others and exits 0 (B0-U14,
+      # case D). The next step closes that gap for npm and NuGet lock files.
+      - name: osv-scanner over every lockfile
+        run: |
+          set +e
+          osv-scanner scan source --recursive --config osv-scanner.toml .
+          code=$?
+          set -e
+          if [ "$code" -ne 128 ]; then exit "$code"; fi
+          manifests="$(git ls-files -- \
+            ':(glob)**/package.json' ':(glob)**/package-lock.json' ':(glob)**/npm-shrinkwrap.json' \
+            ':(glob)**/pnpm-lock.yaml' ':(glob)**/yarn.lock' ':(glob)**/bun.lock' ':(glob)**/bun.lockb' \
+            ':(glob)**/Cargo.toml' ':(glob)**/Cargo.lock' \
+            ':(glob)**/*.csproj' ':(glob)**/*.fsproj' ':(glob)**/*.vbproj' ':(glob)**/packages.lock.json' \
+            ':(glob)**/Directory.Packages.props' ':(glob)**/packages.config' \
+            ':(glob)**/pyproject.toml' ':(glob)**/uv.lock' ':(glob)**/poetry.lock' ':(glob)**/pdm.lock' \
+            ':(glob)**/Pipfile' ':(glob)**/Pipfile.lock' ':(glob)**/requirements*.txt' ':(glob)**/setup.py' \
+            ':(glob)**/build.gradle' ':(glob)**/build.gradle.kts' ':(glob)**/gradle.lockfile' \
+            ':(glob)**/libs.versions.toml' ':(glob)**/pom.xml' \
+            ':(glob)**/go.mod' ':(glob)**/go.sum' ':(glob)**/Gemfile' ':(glob)**/Gemfile.lock' \
+            ':(glob)**/composer.json' ':(glob)**/composer.lock' ':(glob)**/pubspec.lock' ':(glob)**/mix.lock' \
+            ':(glob)**/conan.lock' ':(glob)**/vcpkg.json')"
+          if [ -n "$manifests" ]; then
+            echo "::error::osv-scanner found no packages, but git tracks dependency files. Commit the lockfile osv-scanner reads beside each:"
+            echo "$manifests"
+            exit 1
+          fi
+          echo "No dependency manifest or lockfile is tracked: nothing to scan (osv-scanner exit 128 accepted)."
+      # Every lockfile the installs read is tracked, so osv-scanner sees it. npm: a
+      # package.json that declares dependencies needs a tracked npm, pnpm, yarn or bun
+      # lockfile in its own folder, or at the root of a workspace (package.json
+      # `workspaces` or pnpm-workspace.yaml) that lists its folder; an unrelated lockfile
+      # higher up does not count. NuGet: a project that restores with a lock file
+      # (RestorePackagesWithLockFile true in it or in the nearest Directory.Build.props)
+      # needs packages.lock.json beside it, because `dotnet restore --locked-mode` exits 0
+      # and writes a new one when it is missing (measured, SDK 10.0.404). Cargo.lock and the
+      # CI tools' uv.lock need no line here: their locked installs fail without them
+      # (measured 2026-11-25: `cargo metadata --locked` exit 101, cargo 1.100.0;
+      # `uv run --locked` exit 1, uv 0.13.7), and ci-rust.yml's cargo metadata, clippy,
+      # test and deny commands pass --locked, as the sast job below passes it
+      # to uv. npm ci and pnpm --frozen-lockfile
+      # also fail without theirs, but only in the jobs that install that folder. A test
+      # fixture with dependencies would need an exclusion in the pathspec below.
+      - name: Every manifest's lockfile is tracked
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          missing=""
+          # A workspace pattern as an anchored regex: ** spans folders, * and ? stay inside one.
+          to_regex() {
+            local p="${1#./}"
+            p="${p%/}"
+            printf '^%s$' "$(printf '%s' "$p" | sed -e 's/[].[^$+(){}|\\]/\\&/g' -e 's/\*\*/\x01/g' -e 's/\*/[^\/]*/g' -e 's/?/[^\/]/g' -e 's/\x01/.*/g')"
+          }
+          # The patterns a folder's package.json (`workspaces`) or pnpm-workspace.yaml (`packages`) declares.
+          patterns() {
+            {
+              if [ -f "$1/package.json" ]; then
+                jq -r '(.workspaces // []) | if type == "object" then (.packages // []) else . end | .[]' "$1/package.json" 2>/dev/null || true
+              fi
+              if [ -f "$1/pnpm-workspace.yaml" ]; then
+                awk '/^packages:/ { on = 1; next } on && /^[[:space:]]*-/ { sub(/^[[:space:]]*-[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, ""); print; next } on && /^[^[:space:]#]/ { on = 0 }' \
+                  "$1/pnpm-workspace.yaml"
+              fi
+            } | tr -d "\"'\r"
+          }
+          # Whether a folder (relative to a workspace root) is one of that workspace's packages.
+          member() {
+            local root="$1" rel="$2" pat in=""
+            while IFS= read -r pat; do
+              [ -n "$pat" ] || continue
+              if [ "${pat#!}" != "$pat" ]; then
+                [[ "$rel" =~ $(to_regex "${pat#!}") ]] && return 1
+              elif [[ "$rel" =~ $(to_regex "$pat") ]]; then
+                in=1
+              fi
+            done < <(patterns "$root")
+            [ -n "$in" ]
+          }
+          tracked() { [ -n "$(git ls-files -- "$@")" ]; }
+          npm_locks() { local p="$1"; tracked "${p}package-lock.json" "${p}npm-shrinkwrap.json" "${p}pnpm-lock.yaml" "${p}yarn.lock" "${p}bun.lock" "${p}bun.lockb"; }
+
+          while IFS= read -r -d '' manifest; do
+            rc=0
+            jq -e '((.dependencies // {}) + (.devDependencies // {}) + (.optionalDependencies // {})) | length > 0' "$manifest" >/dev/null 2>&1 || rc=$?
+            case $rc in 0) ;; 1) continue ;; *) missing+="${manifest} (not readable as JSON)"$'\n'; continue ;; esac
+            dir="$(dirname "$manifest")"
+            if [ "$dir" = "." ]; then prefix=""; else prefix="$dir/"; fi
+            npm_locks "$prefix" && continue
+            found=""
+            up="$dir"
+            while [ "$up" != "." ]; do
+              up="$(dirname "$up")"
+              if [ "$up" = "." ]; then uprefix=""; rel="$dir"; else uprefix="$up/"; rel="${dir#"$up"/}"; fi
+              if npm_locks "$uprefix" && member "$up" "$rel"; then found=1; break; fi
+            done
+            [ -n "$found" ] || missing+="${manifest}"$'\n'
+          done < <(git ls-files -z -- ':(glob)**/package.json')
+
+          while IFS= read -r -d '' project; do
+            dir="$(dirname "$project")"
+            if [ "$dir" = "." ]; then prefix=""; else prefix="$dir/"; fi
+            props=""
+            up="$dir"
+            while :; do
+              if [ "$up" = "." ]; then cand="Directory.Build.props"; else cand="$up/Directory.Build.props"; fi
+              if [ -f "$cand" ]; then props="$cand"; break; fi
+              [ "$up" = "." ] && break
+              up="$(dirname "$up")"
+            done
+            if grep -qiE '<RestorePackagesWithLockFile>[[:space:]]*true[[:space:]]*<' "$project" ${props:+"$props"}; then
+              tracked "${prefix}packages.lock.json" || missing+="${project}"$'\n'
+            fi
+          done < <(git ls-files -z -- ':(glob)**/*.csproj' ':(glob)**/*.fsproj' ':(glob)**/*.vbproj')
+
+          if [ -n "$missing" ]; then
+            echo "::error::these manifests have no tracked lockfile where their install reads it (beside them, or at the root of a workspace that lists them):"
+            printf '%s' "$missing"
+            exit 1
+          fi
+          echo "Every npm manifest with dependencies and every NuGet project that restores with a lock file has its tracked lockfile."
+
+  sast:
+    name: Static analysis (Semgrep CE)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }} # false on a schedule, whose payload has no repository
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; setup-uv's download of uv; PyPI for the locked Semgrep tree.
+          # setup-uv asks Astral's mirror for the uv manifest and archive first and falls back to
+          # raw.githubusercontent.com and GitHub Releases (its src/download/manifest.ts, read at the pinned SHA).
+          # No semgrep.dev: the rules are local and metrics are off.
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            releases.astral.sh:443
+            raw.githubusercontent.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          # An exact version, so the archive is checked against the SHA-256 the action carries for it
+          # (src/download/checksum/known-checksums.json at this SHA lists uv up to 0.13.6). Left out, the
+          # action installs the latest uv and takes the checksum from the manifest it downloads with it
+          # (engineering standard 4.5). Dependabot moves only the action's SHA, not this line:
+          # when it bumps the action, set this to the newest uv in the new SHA's table. A uv
+          # older than the one that wrote .github/ci-tools/uv.lock may not read it; the first CI run proves the pair.
+          version: "0.13.6"
+          # `auto` would use the Actions cache, whose endpoints are not on the allow-list above,
+          # and a security job wants no cache anyway.
+          enable-cache: false
+      # Only the rules committed in .semgrep/ run, never registry packs (PG-D5, CV-D17):
+      # the Semgrep Rules License allows the registry's rules "only for your own internal
+      # business purposes", and it does not define "business" for a non-commercial
+      # project (T1 §2.6). The engine itself is LGPL-2.1. --metrics=off: with it,
+      # "metrics are never sent" (https://docs.semgrep.dev/metrics, read 2026-11-18; CV-D17).
+      # SEMGREP_ENABLE_VERSION_CHECK=0 turns off the CLI's own version check, the other
+      # call it would make to semgrep.dev (inference).
+      #
+      # .semgrep/ (the rules, whose messages quote what they find) and .semgrep-tests/
+      # (the red fixture each rule carries, CV-D17) are excluded from the targets, so
+      # neither fails the scan. The fixtures sit outside the --config path because
+      # `--config .semgrep/` reads every YAML file under it as rules, and a `.yml`
+      # fixture (script-no-gh-auth-token targets *.yml) would break the scan
+      # (inference). The next step runs them. Findings that are reviewed and accepted are
+      # suppressed in the code with a `nosemgrep: <rule-id>` comment that says why,
+      # never by deleting a rule.
+      #
+      # Semgrep runs from .github/ci-tools/, a uv project whose uv.lock pins Semgrep's
+      # whole tree with hashes; uvx pinned only the top-level package (R2-B3, E3).
+      # --project keeps the working directory, so the scan covers the repository.
+      - env:
+          SEMGREP_ENABLE_VERSION_CHECK: "0"
+        run: >
+          uv run --project .github/ci-tools --locked
+          semgrep scan --error --metrics=off --exclude internal --exclude .semgrep
+          --exclude .semgrep-tests --config .semgrep/
+      # The red fixtures (CV-D17): each rule's `ruleid:` lines must be found and its `ok:`
+      # lines left alone. Semgrep's rule tests pair a fixture with the rule file of the
+      # same name, so .semgrep-tests/rules.js, rules.sh, rules.yml and so on test
+      # .semgrep/rules.yml (Semgrep's "Testing rules" docs; the pairing across two folders
+      # is proved by the first run, inference). Skipped until the folder exists.
+      - name: Semgrep rule tests (red fixtures)
+        if: ${{ hashFiles('.semgrep-tests/**') != '' }}
+        env:
+          SEMGREP_ENABLE_VERSION_CHECK: "0"
+        run: >
+          uv run --project .github/ci-tools --locked
+          semgrep scan --test --metrics=off --config .semgrep/ .semgrep-tests/
+
+  workflows:
+    name: Workflow lint (actionlint, zizmor)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        if: ${{ github.event.repository.visibility == 'public' }} # false on a schedule, whose payload has no repository
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; the actionlint release archive; zizmor-action installs the zizmor
+          # wheel with `pip download --require-hashes` from PyPI (its action.sh lines 98-105
+          # at the pinned SHA); zizmor's online audits, which read the GitHub API
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint
+        env:
+          VERSION: "1.7.12"
+          SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/actionlint.tar.gz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/actionlint_${VERSION}_linux_amd64.tar.gz"
+          echo "${SHA256}  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color
+      # advanced-security: false makes findings fail this job on every repository. With
+      # true, the action uploads SARIF through github/codeql-action/upload-sarif (its
+      # action.yml, read 2026-11-18), which needs a code-scanning licence when private
+      # and is left out of reserved repositories (CV-D16). Keep it false everywhere.
+      - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        if: ${{ !cancelled() }}
+        with:
+          version: 1.32.0 # the action defaults to `latest`, which would float (N2)
+          # The action's default collects workflows, composite actions and
+          # .github/dependabot.yml, which keeps zizmor's dependabot audits (dependabot-execution
+          # among them). Its dependabot-cooldown audit has a default minimum of 7 days and
+          # reports every block as medium, while the program's cooldown is 5 (14 for a
+          # major; engineering standard 4.4; measured 2026-11-18 and again 2026-11-25: 11
+          # findings on the template's dependabot.yml without the file below).
+          # `.github/zizmor.yml`, which zizmor finds by itself, sets that minimum to 5 for
+          # the audit. Do not narrow `collect` to get past it: that would drop the
+          # dependabot audits from the gate.
+          advanced-security: false
+          persona: regular
+          min-severity: low
+
+  gate:
+    # The one check the ruleset requires from this workflow (see ci-dotnet.yml's gate).
+    name: Security gate
+    if: ${{ always() }}
+    needs: [secrets, deps, sast, workflows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every scan passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          bad="$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key)=\(.value.result)"' <<<"$RESULTS")"
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+          if [ -n "$bad" ]; then echo "::error::not green: $(paste -sd ' ' - <<<"$bad")"; exit 1; fi
+          echo "Every scan passed."

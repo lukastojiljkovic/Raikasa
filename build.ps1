@@ -15,9 +15,16 @@ function Invoke-Step([string] $name, [scriptblock] $command) {
     if ($LASTEXITCODE) { throw "$name failed with exit code $LASTEXITCODE." }
 }
 
-$iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") |
-    Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $iscc) { throw 'Inno Setup 6 was not found. Install it with: winget install JRSoftware.InnoSetup' }
+# The installer is compiled with Inno Setup 7.1.1 from the vendor's own download (jrsoftware.org; CI pins its URL and
+# SHA-256, and sets ISCC to the ISCC.exe it installed). Set ISCC to its ISCC.exe, or install it per user at the
+# default place. Only that version builds the installer.
+$innoVersion = '7.1.1'
+$iscc = if ($env:ISCC) { $env:ISCC } else { "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe" }
+if (-not (Test-Path -LiteralPath $iscc)) { throw "Inno Setup $innoVersion was not found at $iscc. Install it from https://jrsoftware.org/isdl.php or set ISCC to its ISCC.exe." }
+# The compiler names its engine version when it compiles a script, so a tiny one is compiled with the output off.
+$engine = @('[Setup]', 'AppName=version-check', 'AppVersion=1', 'DefaultDirName=version-check') | & $iscc --output=no - | Out-String
+if ($engine -notmatch 'Compiler engine version: Inno Setup (\S+)') { throw "$iscc did not report an Inno Setup version." }
+if ($Matches[1] -ne $innoVersion) { throw "Inno Setup $($Matches[1]) was found at $iscc, but the installer is built with $innoVersion. Install $innoVersion or set ISCC to its ISCC.exe." }
 
 # The product name and the version come from Directory.Build.props, the one place that spells them.
 $props = ([xml](Get-Content "$root\Directory.Build.props")).Project.PropertyGroup

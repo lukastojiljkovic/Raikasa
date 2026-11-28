@@ -1,0 +1,88 @@
+# Cut from .github/workflows/ci-dotnet.yml for check-hygiene.test.mjs, telemetry (5) (B0-U01): the template's file
+# without its header comment and without its jobs lint, audit, licences, mutation, red-green, ui, standard-user,
+# bench, fuzz-build, package, gate. Every other line is the template's, with SOLUTION filled. The test "telemetry
+# (5)'s fixtures are cut from the template's own files" compares it with that file; cut it again when the file
+# changes.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call: # nightly.yml runs the whole CI again
+  workflow_dispatch:
+
+permissions: {}
+
+# Superseded pull-request runs are cancelled; pushes to main and the nightly's call
+# are not, and never share a group with each other.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  # no PowerShell telemetry (PG-D14): the `shell: pwsh` steps below and the toxiproxy action's Windows
+  # start step run pwsh 7, which sends it unless this is set (PowerShell Telemetry.cs: "true, yes, or 1")
+  POWERSHELL_TELEMETRY_OPTOUT: "1"
+
+# Git Bash on the Windows runner, so the scripts read the same as on any system; a step
+# that needs PowerShell says `shell: pwsh`.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: windows-2025
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - run: dotnet restore App.slnx --locked-mode
+      - run: dotnet build App.slnx -c Release --no-restore
+      # Toxiproxy on 127.0.0.1:8474 and TOXIPROXY_URL for the slow-network tests (section
+      # 10.1; round 3, R3-B2), which are ordinary tests of the suite below.
+      - uses: ./.github/actions/toxiproxy # zizmor: ignore[self-repository] actionlint 1.7.12 rejects $/ (rhysd/actionlint#711)
+      # Unit, integration, regression and slow-network tests (screenshot comparisons with
+      # Verify fail here and leave *.received.* files beside the snapshots).
+      - run: >
+          dotnet test --solution App.slnx -c Release --no-build
+          --report-trx --results-directory TestResults
+      # A repository with an updater or a download has slow-network tests: the updater and
+      # every download behind a Toxiproxy proxy with bandwidth, latency, reset_peer,
+      # timeout and limit_data toxics (section 10.1). They live in test classes whose names
+      # end in SlowNetworkTests. A run in which none passed means they were renamed, skipped
+      # or filtered away, and fails. Delete this step only in a repository that downloads
+      # nothing and has no updater (PerfWindow's helper; see the header).
+      - name: The slow-network tests ran
+        if: ${{ !cancelled() }}
+        run: |
+          n="$(find TestResults -name '*.trx' -exec grep -ho '<UnitTestResult [^>]*>' {} + | grep 'SlowNetworkTests' | grep -c 'outcome="Passed"' || true)"
+          echo "Passed slow-network test results: $n"
+          if [ "$n" -eq 0 ]; then echo "::error::no test of a *SlowNetworkTests class passed (section 10.1, slow networks)"; exit 1; fi
+      # CI never writes a baseline (section 7.2): a test that accepted its own
+      # snapshot would leave a changed or new *.verified.* file behind.
+      - name: No baseline was written
+        if: ${{ !cancelled() }}
+        run: |
+          changed="$(git status --porcelain --untracked-files=all -- ':(glob)**/*.verified.*')"
+          if [ -n "$changed" ]; then echo "::error::a test wrote a baseline in CI:"; echo "$changed"; exit 1; fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: test-results
+          path: |
+            TestResults/
+            **/*.received.*
+          retention-days: 14
+

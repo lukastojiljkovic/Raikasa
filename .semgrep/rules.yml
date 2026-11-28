@@ -1,0 +1,167 @@
+# SPDX-License-Identifier: CC0-1.0
+#
+# Semgrep rules committed in this repository. security.yml runs only these, with
+# `semgrep scan --config .semgrep/ --metrics=off`, never the registry's packs (PG-D5,
+# CV-D17): the Semgrep Rules License allows the registry's rules "only for your own
+# internal business purposes" and does not define "business" for a non-commercial
+# project (T1 §2.6). Template: engineering-standard.md, section 4.1.
+# Written 2026-11-18 for the approach of 2026-11-18 (PG-D27). Every rule here is our
+# own; none is copied from the registry.
+#
+# The starter set is the one CV-D17 lists: eval, new Function, innerHTML or outerHTML
+# assignment, document.write, child_process with a shell, and `gh auth token` in
+# scripts. Semgrep was not run on this file when it was written (it is not installed
+# on Luka's PC); the first CI run of an adopting repository is its first proof.
+#
+# Each rule gets a red fixture (CV-D17): a file under .semgrep-tests/, outside this
+# folder, named after this file with the target language's extension (rules.js,
+# rules.sh, rules.yml, ...), with the code the rule must find, marked `ruleid: <id>`,
+# and the code it must leave alone, marked `ok: <id>`. security.yml's sast job runs
+# them with `semgrep scan --test --config .semgrep/ .semgrep-tests/`. They stay out of
+# .semgrep/ because `--config .semgrep/` reads every YAML file there as rules, and the
+# `.yml` fixture of script-no-gh-auth-token would break the scan (inference).
+# security.yml excludes .semgrep/ and .semgrep-tests/ from the scan itself, so neither
+# the rules nor the fixtures fail it. An accepted finding is suppressed
+# in the code with a `nosemgrep: <id>` comment that says why; a rule is never deleted
+# to make a scan pass.
+#
+# Each stack adds its own rules below the starter set, under its own comment:
+#   - Rust apps: for example `unsafe` outside the platform crate, windows-rs calls
+#     outside `<app>-platform` (PG-D40), or `std::process::Command` with `cmd /C`;
+#   - PerfWindow's C# helper: process start with a shell;
+#   - Nexus (Electron): renderer and preload rules for its IPC surface;
+#   - sites: the CSP rules that ci-site.yml does not already gate.
+# Keep the set small and precise: a rule that fires on safe code gets fixed, not muted.
+
+rules:
+  # --- JavaScript and TypeScript -------------------------------------------------
+
+  - id: js-no-eval
+    message: >-
+      eval() runs a string as code. Parse the data instead (JSON.parse, a lookup
+      table); string-to-code is a script-injection path.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern: eval(...)
+
+  - id: js-no-new-function
+    message: >-
+      The Function constructor compiles a string into code, as eval() does. Write
+      the function in the source instead.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: new Function(...)
+      - pattern: Function(...)
+
+  - id: js-no-inner-outer-html-assignment
+    message: >-
+      Assigning to innerHTML or outerHTML parses the value as HTML, so data in it can
+      run as script. Build nodes with createElement and textContent, or clear with
+      replaceChildren().
+    severity: ERROR
+    languages: [javascript, typescript]
+    patterns:
+      - pattern-either:
+          - pattern: $EL.innerHTML = $VALUE
+          - pattern: $EL.innerHTML += $VALUE
+          - pattern: $EL.outerHTML = $VALUE
+          - pattern: $EL.outerHTML += $VALUE
+      - pattern-not: $EL.innerHTML = ""
+
+  - id: js-no-document-write
+    message: >-
+      document.write() and document.writeln() inject raw HTML into the page and are
+      blocked by a strict CSP. Use DOM methods instead.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: document.write(...)
+      - pattern: document.writeln(...)
+
+  - id: node-child-process-exec-uses-shell
+    message: >-
+      child_process exec() and execSync() always run the command through a shell, so
+      any data in the string can become a command. Use execFile() or spawn() with an
+      argument array and no shell.
+    severity: ERROR
+    languages: [javascript, typescript]
+    # Two shapes: the module bound to a name ($CP.exec), and exec or execSync
+    # imported by name. $CP is bound by the import, so a RegExp's .exec() in the same
+    # file does not match.
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import * as $CP from "$MOD"
+                  ...
+              - pattern-inside: |
+                  import $CP from "$MOD"
+                  ...
+              - pattern-inside: |
+                  $CP = require("$MOD")
+                  ...
+          - metavariable-regex:
+              metavariable: $MOD
+              regex: ^(node:)?child_process$
+          - pattern-either:
+              - pattern: $CP.exec(...)
+              - pattern: $CP.execSync(...)
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import { $FN } from "$MOD"
+                  ...
+              - pattern-inside: |
+                  const { $FN } = require("$MOD")
+                  ...
+          - metavariable-regex:
+              metavariable: $MOD
+              regex: ^(node:)?child_process$
+          - metavariable-regex:
+              metavariable: $FN
+              regex: ^(exec|execSync)$
+          - pattern: $FN(...)
+
+  - id: node-child-process-shell-option
+    message: >-
+      `shell: true` makes spawn() or execFile() run the command through a shell, so
+      any data in it can become a command. Pass an argument array without the option.
+    severity: ERROR
+    languages: [javascript, typescript]
+    patterns:
+      - pattern-either:
+          - pattern: '$FN(..., {..., shell: true, ...}, ...)'
+          - pattern: '$CP.$FN(..., {..., shell: true, ...}, ...)'
+      - metavariable-regex:
+          metavariable: $FN
+          regex: ^(spawn|spawnSync|execFile|execFileSync|fork)$
+
+  # --- Scripts in any language ---------------------------------------------------
+
+  - id: script-no-gh-auth-token
+    message: >-
+      `gh auth token` prints the signed-in GitHub token. A script that reads it can
+      leak it into logs, files or requests. In CI use the job's GITHUB_TOKEN through
+      env; locally let gh make the call itself.
+    severity: ERROR
+    languages: [generic]
+    pattern-regex: \bgh\s+auth\s+token\b
+    paths:
+      include:
+        - "*.sh"
+        - "*.bash"
+        - "*.ps1"
+        - "*.psm1"
+        - "*.cmd"
+        - "*.bat"
+        - "*.js"
+        - "*.mjs"
+        - "*.cjs"
+        - "*.ts"
+        - "*.py"
+        - "*.yml"
+        - "*.yaml"
+
+  # --- Stack rules ---------------------------------------------------------------
+  # Each repository adds the rules of its stack here (see the header).

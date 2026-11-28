@@ -1,0 +1,95 @@
+# Dependency review: does THIS pull request add a vulnerable dependency, or one whose
+# licence is not on this repository's whitelist? Template: engineering-standard.md,
+# sections 3.10 and 4. Rewritten 2026-11-18 for the approach of 2026-11-18 (PG-D27).
+#
+# Free on public repositories; needs GitHub Code Security on a private one
+# (https://github.com/github/docs/blob/main/data/reusables/gated-features/dependency-review.md).
+# Private repositories rely on osv-scanner in security.yml for vulnerabilities and on the
+# "Dependency licences and notices" job of their stack's CI (check-licences.mjs or
+# cargo-deny) for licences, which also runs on public ones over the whole tree.
+#
+# Licences (PG-D3; T1 R8): the action reads .github/dependency-review-config.yml, which
+# .github/scripts/licence-configs.mjs generates from .github/licence-policy.json:
+# allow-licenses (class L of the repository's profile), allow-dependencies-licenses (the
+# packages the policy judges as another class), deny-packages (the codecs of PG-D31) and
+# allow-ghsas (the policy's allow_ghsas: an advisory in a tool's own pinned dependency that
+# the job never runs, each with its reason and review date).
+# deny-licenses is not used: the action documents it as deprecated for possible removal
+# in its next major release, and a whitelist is the rule (PG-D2, PG-D3). A licence the
+# action cannot detect does not fail it; the stack CI's licence job catches that.
+# Nothing licence-related is set inline here, so the generated file is the only source.
+#
+# harden-runner (PG-D28, CV-D58, PG-D14): the `review` job runs on Linux and starts with it,
+# in block mode with telemetry off and only the endpoints the job needs; never audit mode,
+# which uploads the job's events to StepSecurity's service. The endpoint list is worked out
+# from the steps (inference) and proved by the first run. The `gate` job carries none: it
+# runs only a shell test over `needs` and reaches no network (engineering standard 3.0).
+#
+# The ruleset requires one check from this file: "Dependency review gate".
+
+name: Dependency review
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: dependency-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Review the dependency diff
+    if: ${{ github.event.repository.visibility == 'public' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write # the summary comment on a failing pull request
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          # checkout; the dependency graph comparison; the deps.dev and OpenSSF Scorecard lookups
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            api.deps.dev:443
+            api.securityscorecards.dev:443
+      # The checkout supplies the generated config file the action reads.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          config-file: ./.github/dependency-review-config.yml
+          fail-on-severity: low
+          comment-summary-in-pr: on-failure
+          show-openssf-scorecard: true
+          warn-on-openssf-scorecard-level: 3
+
+  gate:
+    # The one check the ruleset requires from this workflow. The review may be skipped
+    # only on a repository that is not public (a private one, where GitHub does not offer
+    # it). No harden-runner: the job runs only a shell test over `needs` and reaches no
+    # network.
+    name: Dependency review gate
+    if: ${{ always() }}
+    needs: [review]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: The review passed, or the repository is not public
+        env:
+          RESULT: ${{ needs.review.result }}
+          VISIBILITY: ${{ github.event.repository.visibility }}
+        run: |
+          echo "review: $RESULT (visibility: $VISIBILITY)"
+          if [ "$RESULT" = "success" ]; then exit 0; fi
+          if [ "$RESULT" = "skipped" ] && [ "$VISIBILITY" != "public" ]; then
+            echo "Repository is not public: the stack CI's licence job and osv-scanner cover this."; exit 0
+          fi
+          echo "::error::dependency review is $RESULT"; exit 1
