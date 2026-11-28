@@ -139,7 +139,7 @@ jobs:
   ui-gates:
     # The advanced-UI playbook's gates (advanced-ui-playbook.md section 4) for an egui
     # app: the playbook's gates G1 to G10, G17 and G22 to G28 for a lane-A window, G11 to
-    # G16 where it has GPU graphics (Symphonically), run by the playbook's gate runner from
+    # G16 where it has GPU graphics, run by the playbook's gate runner from
     # the copy vendored in this repository (its open question 17). Until a gate's script
     # exists, the slot runs the gates that do and the missing ones are recorded as
     # deferrals in the project's internal plan (section 3.9; round 2, N21). Delete this
@@ -148,8 +148,7 @@ jobs:
     # It also renders the egui_kittest image snapshots. GitHub's Windows runners have no
     # GPU, so wgpu's DX12 back end gets only WARP, the "Microsoft Basic Render Driver"
     # (inference; verify at adoption). Image snapshots stay in CI only while WARP
-    # reproduces its own baselines (the software-renderer spike of section 3.2, B16; the
-    # Instructium spike S6 and the PeepHole spike SP-CI2 run it too). Delete the
+    # reproduces its own baselines (the software-renderer spike of section 3.2, B16). Delete the
     # image-snapshot step if the section 3.2 WARP check fails: the AccessKit-tree
     # snapshots and the package smoke's reviewed real-window screenshots then carry the
     # check.

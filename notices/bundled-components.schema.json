@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "notices/bundled-components.json",
-  "description": "The inventory of every shipped component that is not a package of a package manager (S-13; P-34; AbsolutelyFiles spec, 'Components that are not crates'). .github/scripts/generate-notices.mjs validates the inventory against this file with its own small validator, which understands exactly the keywords used here: type, enum, const, pattern, minLength, minItems, required, properties, additionalProperties, items, $ref, oneOf and uniqueItems. Keep to those keywords when changing this file.",
+  "description": "The inventory of every shipped component that is not a package of a package manager (S-13; P-34). .github/scripts/generate-notices.mjs validates the inventory against this file with its own small validator, which understands exactly the keywords used here: type, enum, const, pattern, minLength, minItems, required, properties, additionalProperties, items, $ref, oneOf and uniqueItems. Keep to those keywords when changing this file.",
   "type": "object",
   "required": ["schemaVersion", "components"],
   "additionalProperties": false,
@@ -42,7 +42,7 @@
           }
         },
         "ships": {
-          "description": "Where the component ships. package is the unit that carries it: the word installer marks the installer, anything else is free text such as crate:absolutelyfiles-ui. architecture is x64, arm64 or any; --installer <name> keeps a component whose ships hold that architecture or any.",
+          "description": "Where the component ships. package is the unit that carries it: the word installer marks the installer, anything else is free text such as crate:app-ui. architecture is x64, arm64 or any; --installer <name> keeps a component whose ships hold that architecture or any.",
           "type": "array",
           "minItems": 1,
           "items": {

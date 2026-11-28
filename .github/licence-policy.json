@@ -3,7 +3,7 @@
     "Licence policy, version 2. Rewritten 2026-11-18 for the approach of 2026-11-18 (PG-D27).",
     "The one machine-readable licence whitelist of this repository (PG-D3; T1 R7). Three scripts read it: .github/scripts/check-licences.mjs judges every dependency and record against it, .github/scripts/generate-notices.mjs writes THIRD-PARTY-NOTICES.md from its platform entries, its nuget clarifications and its licence_texts, crate_texts and source_links, and .github/scripts/licence-configs.mjs generates deny.toml, about.toml, .github/dependency-review-config.yml and the three nuget-license files .github/nuget-license/allowed-licenses.json, overrides.json (from the nuget clarifications) and licensefile-mappings.json (always {}, because a nuget clarification pins the installed file, never a committed copy; nuget-license is still given the file) from it (T1 R8). Change this file, then run `node .github/scripts/licence-configs.mjs --write`; CI runs `--check` and fails on any drift. The lists follow knowledge/licensing.md (§2.3 the whitelist, §2.6 patents, §8.5 the gate) and engineering-standard.md §3.10.",
     "Nobody accepts a licence by hand (PG-D2; AP §1). A licence that is not on the allow list of its class and profile fails. The agent then writes a clarification (the true licence is on the list, with evidence and the licence file's SHA-256), replaces the dependency, or drops the part. There is no exception list and no expiry date. Luka is never asked about a licence.",
-    "profile (PG-D1; T1 R2): gpl = GPL-3.0-or-later without the linking exception; gpl-le = with the GPL linking exception (PerfWindow PW-D12, Instructium IN-D13); reserved = the CV; permissive = a repository not yet relicensed. Set it when the template is adopted; both scripts refuse to run while it is the placeholder.",
+    "profile (PG-D1; T1 R2): gpl = GPL-3.0-or-later without the linking exception; gpl-le = with the GPL linking exception; reserved = the CV; permissive = a repository not yet relicensed. Set it when the template is adopted; both scripts refuse to run while it is the placeholder.",
     "classes (PG-D1; T1 R1): L linked code, F fonts, C content and data, M model weights, P platform components, T build and CI tools (never shipped). Package-manager trees are class L unless class_overrides names a package; vendored files take the class of their REUSE.toml path group. Classes F, C, M and T are the same in every profile; only L depends on the profile.",
     "deny: SPDX id (a * glob is allowed) -> the reason the gate prints. It applies to classes L, F, C and M and to toolchain runtimes, and wins over every allow list, except that tier2 licences pass on a pointer record of class C or M (PG-D2). Ids not in deny and not on an allow list fail too, with the generic reason. Class T and the separate programs and upstream binaries of class P use only their own allow lists, because combining is not at stake there (T1 R4, §2.6; PG-D36 (3)).",
     "allow.P: per platform kind. A toolchain runtime is linked into our binaries, so its licence must also pass the profile's class-L list, or be one of the ids listed for it here.",
@@ -281,7 +281,7 @@
       "pypi": [],
       "maven": [],
       "scan_strings": ["libwebp"],
-      "scan_exempt": "a libwebp built with no VP8 code, for lossless WebP output only, if Contextool's S-I1 finds no WIC WebP encoder (CT-D18, PG-D31; whether libwebp builds that way was not checked). Contextool removes this entry only once its build is shown to hold no VP8 code, and records that in docs/format-sources.md"
+      "scan_exempt": "a libwebp built with no VP8 code, for lossless WebP output only, if an app finds no WIC WebP encoder (PG-D31; whether libwebp builds that way was not checked). The app removes this entry only once its build is shown to hold no VP8 code, and records that in docs/format-sources.md"
     }
   ],
   "denied_features": [
@@ -303,7 +303,7 @@
     {
       "crate": "image",
       "features": ["webp"],
-      "reason": "pulls image-webp, which holds a lossy VP8 decoder (R1 §2.10; PG-D31): an app that uses image enables PNG and JPEG only. PeepHole, whose register decodes lossless WebP (VP8L) through image and checks the VP8 or VP8L chunk before decoding (PH-D18; spec Formats, v1), removes this entry at adoption; no other repository does"
+      "reason": "pulls image-webp, which holds a lossy VP8 decoder (R1 §2.10; PG-D31): an app that uses image enables PNG and JPEG only. An app that decodes lossless WebP (VP8L) through image and checks the VP8 or VP8L chunk before decoding removes this entry at adoption; no other repository does"
     }
   ],
   "own_sources": [],

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 //
-// The notices generator (S-13; AbsolutelyFiles spec 5.13; engineering standard 3.10; PG-D3, PG-D4,
+// The notices generator (S-13; engineering standard 3.10; PG-D3, PG-D4,
 // PG-D10, PG-D36 (3), PG-D39). It writes THIRD-PARTY-NOTICES.md, and it fails on every notice
 // problem a release could carry: a component with no licence, a notice text that no longer hashes
 // to its pin, an obligation that nothing meets, a platform text that is not pinned. Nothing in this
@@ -38,7 +38,7 @@
 //        One call can take both reports (--cargo-about and --nuget-license): a repository that ships
 //        Rust and .NET has one THIRD-PARTY-NOTICES.md, written by one job that has both reports.
 //   --nuget-license <json> nuget-license 4.0.18 (ledger seq 21) output, for PerfWindow's sensor helper and
-//        Raikasa 2.0.1 only (PG-D39). Run it on the shipped project only (`-i <shipped .csproj>`, not
+//        one .NET release only (PG-D39). Run it on the shipped project only (`-i <shipped .csproj>`, not
 //        the solution: a test project's packages are not shipped and would be listed as if they were),
 //        always with the three files that the policy generates, so that a package which gives its
 //        licence as a URL or a file is replaced by its clarification (the .NET 10 SDK must be on PATH or

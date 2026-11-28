@@ -423,7 +423,7 @@ export function analyse(input) {
   const arch = set('ArchitecturesInstallIn64BitMode');
   const allowed = set('ArchitecturesAllowed');
   if (!arch || arch.value === '') add('IC-2', arch?.n ?? setupLine, 'ArchitecturesInstallIn64BitMode is not set');
-  // The Arm64 form (Privatica, PeepHole; Raikasa if its D-14 passes). SetupArchitecture stays x64: ISCC 7.1.1 takes only x86
+  // The Arm64 form (an app that ships an Arm64 installer). SetupArchitecture stays x64: ISCC 7.1.1 takes only x86
   // and x64 there (measured: arm64 is "invalid", exit code 2), and the help says the x64 Setup runs on Arm64 Windows 11 by
   // emulation. ArchitecturesAllowed=arm64 is what keeps an x64 PC out: Setup ends with WindowsVersionNotSupported when the
   // expression does not match (Setup.MainFunc.pas lines 3622-3624 at tag is-7_1_1). With arm64 in the install mode only, an x64
@@ -640,7 +640,7 @@ export function analyse(input) {
       add('IC-12', change.n, `the script changes the system (${SYSTEM_CHANGE_RE.exec(change.text)[0]}) but the profile lacks system-changes: declare it, so the undo before the first file is removed is checked (P-44)`);
     } else if (profile.length > 0) {
       // A superseding entry replaces the previous release's undo command, so the app has a change to undo. That undo is code,
-      // and the entry is not it: it runs after CurUninstallStepChanged(usUninstall) (closing round, Raikasa 3.0.0).
+      // and the entry is not it: it runs after CurUninstallStepChanged(usUninstall) (closing round).
       const sup = s.entries('uninstallrun').find((e) => e.p.runonceid && inheritedIds.includes(e.p.runonceid));
       if (sup) {
         add('IC-12', sup.n, `the [UninstallRun] entry supersedes the previous release's entry "${sup.p.runonceid}", which undid a change of that release, but the profile lacks system-changes: the superseding entry is no undo (it runs after CurUninstallStepChanged(usUninstall)), so declare system-changes and undo in code`);
@@ -867,7 +867,7 @@ export function analyse(input) {
     // The two scripts are compared as PATTERNS, with `{#AppVersion}` left as a token on both sides: each script has its own
     // `#ifndef AppVersion` fallback (the real 2.x scripts say "2.0.0", the template "0.0.0"), and the build passes the real
     // version with --define=AppVersion=..., so what ISCC writes is `<App>-<that version>-Setup` for both (fix round 2).
-    // An Arm64 script against a previous script that is not one (Raikasa's Arm64 installer if its D-14 passes) has no name
+    // An Arm64 script against a previous script that is not one (an app's Arm64 installer) has no name
     // to keep: the installed updaters select the x64 asset, so its D-A name -windows-arm64 is a new asset (IC-2 checks it).
     const pk = parse(input.previous, ['AppVersion']);
     const pout = pk.setup.get('outputbasefilename')?.value;
