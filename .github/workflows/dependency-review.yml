@@ -11,7 +11,9 @@
 # Licences (PG-D3; T1 R8): the action reads .github/dependency-review-config.yml, which
 # .github/scripts/licence-configs.mjs generates from .github/licence-policy.json:
 # allow-licenses (class L of the repository's profile), allow-dependencies-licenses (the
-# packages the policy judges as another class) and deny-packages (the codecs of PG-D31).
+# packages the policy judges as another class), deny-packages (the codecs of PG-D31) and
+# allow-ghsas (the policy's allow_ghsas: an advisory in a tool's own pinned dependency that
+# the job never runs, each with its reason and review date).
 # deny-licenses is not used: the action documents it as deprecated for possible removal
 # in its next major release, and a whitelist is the rule (PG-D2, PG-D3). A licence the
 # action cannot detect does not fail it; the stack CI's licence job catches that.

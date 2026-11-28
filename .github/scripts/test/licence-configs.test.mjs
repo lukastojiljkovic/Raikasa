@@ -27,7 +27,7 @@ const SHA = "b".repeat(64);
 // case. A case that needs one passes it through `extra` (B0-U01). The `rust` settings are per-repository too (a
 // second target, a git source, an ignored advisory), so they start from the template's one target and no exception.
 const RUST = { ...structuredClone(TEMPLATE.rust), targets: ["x86_64-pc-windows-gnullvm"], allow_git: [], advisories_ignore: [] };
-const policyFor = (profile = "gpl", extra = {}) => ({ ...structuredClone(TEMPLATE), profile, generate: OUTPUTS, own_sources: [], clarifications: [], class_overrides: [], lgpl_dynamic: [], rust: structuredClone(RUST), ...extra });
+const policyFor = (profile = "gpl", extra = {}) => ({ ...structuredClone(TEMPLATE), profile, generate: OUTPUTS, own_sources: [], clarifications: [], class_overrides: [], lgpl_dynamic: [], allow_ghsas: [], rust: structuredClone(RUST), ...extra });
 const PLACEHOLDER_PROFILE = `{{${"tpl:LICENCE_PROFILE"}}}`; // built at run time so this file carries no placeholder of its own
 
 function repo(policy) {
@@ -249,6 +249,51 @@ test("Luka's own crates (own_sources, S-27) pass a gpl-le gate by source while c
     () => compilePolicy(policyFor("gpl", { own_sources: own, class_overrides: [{ ecosystem: "cargo", package: "kit-theme", class: "F", why: "w" }] })),
     /kit-theme is in own_sources and also in class_overrides/,
   );
+});
+
+const GHSA_ENTRY = { id: "GHSA-84m7-p3x7-pcfv", reason: "mcp 1.29.0, pinned by a tool; its server transport is never started.", until: "2027-01-15" };
+
+test("allow_ghsas reach the dependency review as allow-ghsas, each with its reason and review date above it; an empty list writes nothing; no other file carries an id", () => {
+  const none = render(compilePolicy(policyFor("gpl")));
+  assert.doesNotMatch(none[".github/dependency-review-config.yml"], /allow-ghsas/, "an empty list must leave the config as it was");
+  const files = render(compilePolicy(policyFor("gpl", { allow_ghsas: [GHSA_ENTRY, { ...GHSA_ENTRY, id: "GHSA-qx49-fqc8-xw99", reason: "its OAuth client is never started.", until: "2027-02-01" }] })));
+  assert.match(
+    files[".github/dependency-review-config.yml"],
+    /\nallow-ghsas:\n {2}# mcp 1\.29\.0, pinned by a tool; its server transport is never started\. Review by 2027-01-15\.\n {2}- 'GHSA-84m7-p3x7-pcfv'\n {2}# its OAuth client is never started\. Review by 2027-02-01\.\n {2}- 'GHSA-qx49-fqc8-xw99'\n$/,
+  );
+  for (const [path, text] of Object.entries(files)) {
+    if (path !== ".github/dependency-review-config.yml") assert.doesNotMatch(text, /GHSA/, `${path} must not carry an advisory id`);
+  }
+});
+
+test("a malformed allow_ghsas entry is refused as a malformed policy, and nothing is written", () => {
+  const bad = {
+    "an id that is not a GHSA id": { ...GHSA_ENTRY, id: "CVE-2026-0001" },
+    "an id with a character GHSA ids never use": { ...GHSA_ENTRY, id: "GHSA-84m7-p3x7-pcfa" },
+    "an id in lower case": { ...GHSA_ENTRY, id: "ghsa-84m7-p3x7-pcfv" },
+    "no reason": { ...GHSA_ENTRY, reason: "" },
+    "a reason of spaces": { ...GHSA_ENTRY, reason: "   " },
+    "a reason on two lines": { ...GHSA_ENTRY, reason: "first\nsecond" },
+    "no review date": { id: GHSA_ENTRY.id, reason: GHSA_ENTRY.reason },
+    "a review date that is not YYYY-MM-DD": { ...GHSA_ENTRY, until: "2027-1-15" },
+    "a bare id in place of an entry": GHSA_ENTRY.id,
+  };
+  for (const [what, entry] of Object.entries(bad)) {
+    assert.throws(() => compilePolicy(policyFor("gpl", { allow_ghsas: [entry] })), /an allow_ghsas entry needs id/, what);
+  }
+  assert.throws(() => compilePolicy(policyFor("gpl", { allow_ghsas: [GHSA_ENTRY, { ...GHSA_ENTRY }] })), /GHSA-84m7-p3x7-pcfv is listed twice in allow_ghsas/);
+  assert.throws(() => compilePolicy(policyFor("gpl", { allow_ghsas: {} })), /allow_ghsas must be a list/);
+  const r = repo(policyFor("gpl", { allow_ghsas: [{ ...GHSA_ENTRY, reason: "" }] }));
+  try {
+    for (const mode of ["--write", "--check"]) {
+      const g = r.gen(mode);
+      assert.equal(g.code, 2, `${mode}: ${g.out}`);
+      assert.match(g.out, /an allow_ghsas entry needs id/);
+    }
+    assert.ok(!existsSync(join(r.dir, ".github", "dependency-review-config.yml")), "nothing is written");
+  } finally {
+    r.cleanup();
+  }
 });
 
 const nugetClarification = (pkg, version, licence, path) => ({ ecosystem: "nuget", package: pkg, version, licence, evidence: "the package's licence file", read: "2026-11-18", licence_file: { path, sha256: SHA } });

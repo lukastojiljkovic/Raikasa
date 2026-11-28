@@ -61,3 +61,16 @@ deny-packages:
   - 'pkg:cargo/audiopus_sys'
   - 'pkg:cargo/libwebp-sys'
   - 'pkg:cargo/webp'
+
+# Advisories this repository accepts (allow_ghsas), each with its reason and the date it is reviewed again.
+allow-ghsas:
+  # mcp 1.29.0, pinned by Semgrep (.github/ci-tools/uv.lock): the StreamableHTTP server transport, which `semgrep scan` never starts. Review by 2027-01-15.
+  - 'GHSA-84m7-p3x7-pcfv'
+  # mcp 1.29.0, pinned by Semgrep (.github/ci-tools/uv.lock): the MCP OAuth client, which `semgrep scan` never starts. Review by 2027-01-15.
+  - 'GHSA-qx49-fqc8-xw99'
+  # mcp 1.29.0, pinned by Semgrep (.github/ci-tools/uv.lock): the MCP HTTP client transports, which `semgrep scan` never starts. Review by 2027-01-15.
+  - 'GHSA-5h93-6whr-6q8j'
+  # mcp 1.29.0, pinned by Semgrep (.github/ci-tools/uv.lock): the MCP client's output-schema validation, which `semgrep scan` never starts. Review by 2027-01-15.
+  - 'GHSA-rwrf-2pqf-9j8j'
+  # mcp 1.29.0, pinned by Semgrep (.github/ci-tools/uv.lock): the MCP server's bearer-token check, which `semgrep scan` never starts. Review by 2027-01-15.
+  - 'GHSA-w4fh-qvv9-3v23'

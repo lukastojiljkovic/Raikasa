@@ -20,6 +20,7 @@
     "denied_components (PG-D31; licensing.md §2.6): packages whose presence fails the gate whatever their licence, because they implement a format whose patent holders license it for money, or one that a pool also licenses. The package names are a starting set (inference: crate and npm names as known when this was written). The string scan of the shipped binaries is the backstop: `check-licences.mjs --format scan`, the `Denied-codec string scan` step of ci-rust.yml's package job, fails a binary that holds a scan_strings entry. scan_exempt names the one place a string is allowed, which is never a download of ours (PG-D37), so the scan applies no exemption.",
     "denied_features (PG-D6, PG-D31): crate features that must stay off. Generated into deny.toml [[bans.features]].",
     "own_sources (S-27; licensing.md §0, §3.3, §3.16): { ecosystem: cargo, source (the https git URL of the repository), crates: [names], licence, why }. Luka's own crates fetched from another of his repositories: the S-27 kit crates (`kit-*`) from their shared home and the S-01 crate once it leaves PerfWindow. They are admitted by source, not by licence: each source joins rust.allow_git, and each crate gets its own exception for its licence in deny.toml, about.toml and the dependency review, while class L stays as the profile has it. In a gpl-le program they are covered by that program's own §7 permission (PW-D12, IN-D13), which is why profile_reasons' rule against third-party GPL code does not apply to them (inference, the S-27 licensing rule of 2026-11-18). Only the gpl and gpl-le profiles take them, and the licence must be GPL-3.0-or-later (optionally WITH an exception). Never list a third party's crate here.",
+    "allow_ghsas: { id (GHSA-xxxx-xxxx-xxxx), reason (one line), until (YYYY-MM-DD) }. Advisories that the dependency review accepts, generated into allow-ghsas of dependency-review-config.yml with the reason and date as a comment above each. Use it only for an advisory in a tool's own pinned dependency that no release avoids and whose code path the job never runs; the same advisory is accepted in osv-scanner.toml until the same date, so one review date covers both. Empty is the normal state.",
     "rust: settings that only deny.toml and about.toml use: build targets (PG-D10), RustSec advisories ignored with { id, reason } (each names the condition that retires it), and allowed git sources.",
     "generate: the files licence-configs.mjs writes and checks; delete the entries this repository's stacks do not use."
   ],
@@ -307,6 +308,33 @@
     }
   ],
   "own_sources": [],
+  "allow_ghsas": [
+    {
+      "id": "GHSA-84m7-p3x7-pcfv",
+      "reason": "mcp 1.29.0, pinned by Semgrep (.github/ci-tools/uv.lock): the StreamableHTTP server transport, which `semgrep scan` never starts.",
+      "until": "2027-01-15"
+    },
+    {
+      "id": "GHSA-qx49-fqc8-xw99",
+      "reason": "mcp 1.29.0, pinned by Semgrep (.github/ci-tools/uv.lock): the MCP OAuth client, which `semgrep scan` never starts.",
+      "until": "2027-01-15"
+    },
+    {
+      "id": "GHSA-5h93-6whr-6q8j",
+      "reason": "mcp 1.29.0, pinned by Semgrep (.github/ci-tools/uv.lock): the MCP HTTP client transports, which `semgrep scan` never starts.",
+      "until": "2027-01-15"
+    },
+    {
+      "id": "GHSA-rwrf-2pqf-9j8j",
+      "reason": "mcp 1.29.0, pinned by Semgrep (.github/ci-tools/uv.lock): the MCP client's output-schema validation, which `semgrep scan` never starts.",
+      "until": "2027-01-15"
+    },
+    {
+      "id": "GHSA-w4fh-qvv9-3v23",
+      "reason": "mcp 1.29.0, pinned by Semgrep (.github/ci-tools/uv.lock): the MCP server's bearer-token check, which `semgrep scan` never starts.",
+      "until": "2027-01-15"
+    }
+  ],
   "rust": {
     "targets": ["x86_64-pc-windows-gnullvm"],
     "advisories_ignore": [],

@@ -10,7 +10,7 @@
 //   about.toml                                 cargo-about 0.9: accepted, per-crate accepted
 //                                              and clarify
 //   .github/dependency-review-config.yml       actions/dependency-review-action: allow-licenses,
-//                                              allow-dependencies-licenses, deny-packages
+//                                              allow-dependencies-licenses, deny-packages, allow-ghsas
 //   .github/nuget-license/allowed-licenses.json  nuget-license 4.0: the allowed licence types
 //   .github/nuget-license/overrides.json      nuget-license 4.0 --override-package-information:
 //                                              { Id, Version, License } per NuGet clarification
@@ -45,6 +45,7 @@ export const PLATFORM_KINDS = ["separate-program", "toolchain-runtime", "upstrea
 const SHIPPED_CLASSES = ["L", "F", "C", "M"]; // the classes `deny` applies to
 const SHA256 = /^[0-9a-f]{64}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const GHSA = /^GHSA(-[2-9cfghjmpqrvwx]{4}){3}$/; // GitHub's advisory ids use these 23 characters only
 const GENERATOR = ".github/scripts/licence-configs.mjs";
 const POLICY_PATH = ".github/licence-policy.json";
 
@@ -103,8 +104,17 @@ export function compilePolicy(p) {
   if (!isObject(p.licence_refs ?? {}) || !Object.values(p.licence_refs ?? {}).every((r) => isObject(r) && strings(r.requires ?? []))) {
     fail("licence_refs maps each LicenseRef id to { meaning, requires: [fields] }");
   }
-  for (const k of ["class_overrides", "lgpl_dynamic", "clarifications", "platform", "denied_components", "denied_features", "own_sources"]) {
+  for (const k of ["class_overrides", "lgpl_dynamic", "clarifications", "platform", "denied_components", "denied_features", "own_sources", "allow_ghsas"]) {
     if (!Array.isArray(p[k] ?? [])) fail(`${k} must be a list`);
+  }
+  // Advisories the dependency review accepts: each names its reason on one line and the date it is reviewed again.
+  const ghsas = new Set();
+  for (const g of p.allow_ghsas ?? []) {
+    if (!isObject(g) || !GHSA.test(g.id ?? "") || typeof g.reason !== "string" || !g.reason.trim() || /[\r\n]/.test(g.reason) || !DATE.test(g.until ?? "")) {
+      fail(`an allow_ghsas entry needs id (GHSA-xxxx-xxxx-xxxx), reason (one line) and until (YYYY-MM-DD): ${JSON.stringify(g)}`);
+    }
+    if (ghsas.has(g.id.toLowerCase())) fail(`${g.id} is listed twice in allow_ghsas`);
+    ghsas.add(g.id.toLowerCase());
   }
   if (!isObject(p.rust ?? {})) fail("rust must be an object");
   const rust = { targets: [], advisories_ignore: [], allow_git: [], ...(p.rust ?? {}) };
@@ -139,6 +149,7 @@ export function compilePolicy(p) {
     deniedComponents: p.denied_components ?? [],
     deniedFeatures: p.denied_features ?? [],
     ownSources: p.own_sources ?? [],
+    allowGhsas: p.allow_ghsas ?? [],
     generate: p.generate,
     problems: [],
   };
@@ -479,6 +490,15 @@ function renderDependencyReview(policy) {
       policy.deniedComponents.flatMap((d) => ECOSYSTEMS.flatMap((e) => (d[e] ?? []).map((n) => purl(e, n)))),
       ["Denied components (PG-D31): codecs whose patent holders or pools license them."],
     ),
+    // Not a list helper call: each advisory carries its own reason and review date as a comment above it.
+    ...(policy.allowGhsas.length
+      ? [
+          "",
+          "# Advisories this repository accepts (allow_ghsas), each with its reason and the date it is reviewed again.",
+          "allow-ghsas:",
+          ...policy.allowGhsas.flatMap((g) => [`  # ${g.reason} Review by ${g.until}.`, `  - ${y(g.id)}`]),
+        ]
+      : []),
   ];
   return `${out.join("\n")}\n`;
 }
