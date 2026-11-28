@@ -240,6 +240,7 @@ WinUI 3 with Mica, the WinUI `TitleBar`, and a `NavigationView`:
 
 Run and History are up to 1400 px wide, the other pages 1000 px. Both panes fit down to the window's minimum width, so
 the Run page keeps its layout at every size.
+
 - **Settings**: theme, restore point before running, fix known problems automatically, temporary file age, show
   technical details, hide personal details in reports, reminder, welcome screen, history and logs, About (version,
   MIT license, source, Terms, Privacy).
