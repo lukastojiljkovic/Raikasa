@@ -14,7 +14,10 @@
        created (exit 91 otherwise).
     2. The account. A random name and a random 32-character password from the
        cryptographic generator; member of Users (S-1-5-32-545) only. It may read the
-       workspace and write one output folder, $env:STANDARD_USER_OUT.
+       workspace and write one output folder, $env:STANDARD_USER_OUT, and a temporary folder of
+       its own: its TEMP and TMP, made under the runner temp with a DACL for that account, the
+       identity that runs the action and SYSTEM only. The runner account's own TEMP is under a
+       profile that a standard user cannot enter.
     3. The run, by token kind:
          desktop  by -DesktopRoute, after the account is granted the window station and
                   desktop (Microsoft's page: "The application must add permission for the
@@ -39,7 +42,8 @@
        The script under test is the repository's own code and could overwrite those
        files; the check guards against a wrong token, not against a hostile script.
     5. Cleanup in `finally`, whatever happened, in reverse order of creation (profile,
-       task, batch right, station grant, seclogon, the two ACL entries, the account).
+       task, batch right, station grant, seclogon, the temporary folder, the two ACL entries, the
+       account).
        Every item is recorded before it is created; the account by its name, which is
        checked free first, and its SID once New-LocalUser returns. Each step is a no-op
        when its item is gone, and a failing step does not stop the others. The output

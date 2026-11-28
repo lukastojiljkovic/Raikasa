@@ -48,7 +48,7 @@ description: Runs a PowerShell script as a fresh standard local user and checks 
 
 inputs:
   script:
-    description: Path of the PowerShell script to run, relative to the workspace. It runs as the account, with the workspace as its working directory. The action grants the account read access to the workspace and write access to $env:STANDARD_USER_OUT, and nothing else; what else it may write follows the runner's own permissions.
+    description: Path of the PowerShell script to run, relative to the workspace. It runs as the account, with the workspace as its working directory. The action grants the account read access to the workspace and write access to $env:STANDARD_USER_OUT and to a temporary folder of its own, which is its TEMP and TMP and is removed afterwards, and nothing else; what else it may write follows the runner's own permissions.
     required: true
   token:
     description: "desktop or batch (see the header)."

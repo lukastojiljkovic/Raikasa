@@ -64,6 +64,7 @@ $script:RouteDescription = @{
 $script:Removers = @{
     'account'       = 'Remove-SUAccount'
     'folder-access' = 'Remove-SUFolderAccess'
+    'temp-folder'   = 'Remove-SUTempFolder'
     'seclogon'      = 'Stop-SUSecondaryLogon'
     'station-grant' = 'Remove-SUStationGrant'
     'batch-right'   = 'Remove-SUBatchRight'
@@ -602,6 +603,9 @@ function New-WrapperText {
         groups are not empty does it run the script under test, with its output in the log,
         and exit with the script's exit code. Otherwise it removes what it wrote and exits
         93 without running the script, so a fallback route never runs the script twice.
+        It sets TEMP and TMP to -Temp, a folder the account owns: the child would otherwise
+        inherit the runner account's, which is under a profile a standard user cannot enter
+        ("Access to the path 'C:\Users\RUNNER~1\AppData' is denied").
         It holds no secret.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Returns text only.')]
@@ -613,13 +617,16 @@ function New-WrapperText {
         [Parameter(Mandatory)] [string] $UserFile,
         [Parameter(Mandatory)] [string] $Log,
         [Parameter(Mandatory)] [string] $ScriptPath,
-        [Parameter(Mandatory)] [string] $Workspace
+        [Parameter(Mandatory)] [string] $Workspace,
+        [Parameter(Mandatory)] [string] $Temp
     )
     $q = { param([string] $s) "'" + $s.Replace("'", "''") + "'" }
     @"
 `$ErrorActionPreference = 'Continue'
 `$env:STANDARD_USER_OUT = $(& $q $Out)
 `$env:GITHUB_WORKSPACE = $(& $q $Workspace)
+`$env:TEMP = $(& $q $Temp)
+`$env:TMP = $(& $q $Temp)
 `$whoami = Join-Path `$env:SystemRoot 'System32\whoami.exe'
 try {
     & `$whoami /user /fo csv /nh | Set-Content -LiteralPath $(& $q $UserFile) -Encoding utf8 -ErrorAction Stop
@@ -660,6 +667,40 @@ function Grant-SUFolderAccess {
     if ($PSCmdlet.ShouldProcess($Path, "Grant $Sid $Rights")) {
         $acl.AddAccessRule($rule)
         [System.IO.FileSystemAclExtensions]::SetAccessControl($folder, $acl)
+    }
+}
+
+function New-SUTempFolder {
+    # The child's TEMP and TMP. The runner account's own TEMP is under its profile, which a
+    # standard user cannot enter, so every test that makes a temporary file would fail with
+    # UnauthorizedAccessException. The folder is made here, under the runner temp, and its
+    # DACL is protected from inheritance and holds three entries and no others: the account
+    # (Modify), the identity that runs this action, which removes the folder again, and SYSTEM
+    # (both FullControl). All three are inheritable, so what the child creates below it can
+    # be deleted by the action too. Users, Everyone and Authenticated Users get nothing.
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)] [string] $Path,
+        [Parameter(Mandatory)] [ValidatePattern('^S-1-[0-9]+(-[0-9]+)+$')] [string] $Sid
+    )
+    if ($PSCmdlet.ShouldProcess($Path, 'Create the standard user''s temporary folder')) {
+        $folder = New-Item -ItemType Directory -Path $Path
+        $acl = [System.IO.FileSystemAclExtensions]::GetAccessControl($folder, [System.Security.AccessControl.AccessControlSections]::Access)
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($entry in @(
+                @{ Id = [System.Security.Principal.SecurityIdentifier]::new($Sid); Rights = 'Modify' }
+                @{ Id = [System.Security.Principal.WindowsIdentity]::GetCurrent().User; Rights = 'FullControl' }
+                @{ Id = [System.Security.Principal.SecurityIdentifier]::new('S-1-5-18'); Rights = 'FullControl' })) {
+            $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+                    $entry.Id,
+                    [System.Security.AccessControl.FileSystemRights] $entry.Rights,
+                    [System.Security.AccessControl.InheritanceFlags] 'ContainerInherit, ObjectInherit',
+                    [System.Security.AccessControl.PropagationFlags]::None,
+                    [System.Security.AccessControl.AccessControlType]::Allow))
+        }
+        [System.IO.FileSystemAclExtensions]::SetAccessControl($folder, $acl)
+        $Path
     }
 }
 
@@ -720,6 +761,9 @@ function Invoke-StandardUserRun {
     $scriptPath = (Resolve-Path -LiteralPath (Join-Path $Workspace $Script)).Path
     $name = New-StandardUserName
     $out = Join-Path $RunnerTemp "standard-user-$name"
+    # The child's TEMP and TMP. Not under $out: that folder stays for the job's later steps,
+    # this one is removed in the cleanup.
+    $tempDir = Join-Path $RunnerTemp "su-temp-$name"
     $wrapper = Join-Path $out 'wrapper.ps1'
     $groupsFile = Join-Path $out 'groups.csv'
     $userFile = Join-Path $out 'user.csv'
@@ -758,7 +802,9 @@ function Invoke-StandardUserRun {
         Add-StandardUserItem -State $state -Kind folder-access -Data @{ Path = $Workspace; Sid = $sid.Value }
         Grant-SUFolderAccess -Path $Workspace -Sid $sid.Value -Rights ReadAndExecute
         Add-StepOutput -Name out-dir -Value $out
-        New-WrapperText -Out $out -GroupsFile $groupsFile -UserFile $userFile -Log $log -ScriptPath $scriptPath -Workspace $Workspace |
+        Add-StandardUserItem -State $state -Kind temp-folder -Data @{ Path = $tempDir }
+        $null = New-SUTempFolder -Path $tempDir -Sid $sid.Value
+        New-WrapperText -Out $out -GroupsFile $groupsFile -UserFile $userFile -Log $log -ScriptPath $scriptPath -Workspace $Workspace -Temp $tempDir |
             Set-Content -LiteralPath $wrapper -Encoding utf8
 
         $context = @{
@@ -860,7 +906,7 @@ function Add-StandardUserItem {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [AllowEmptyCollection()] [System.Collections.Generic.List[object]] $State,
-        [Parameter(Mandatory)] [ValidateSet('account', 'folder-access', 'seclogon', 'station-grant', 'batch-right', 'task', 'profile')] [string] $Kind,
+        [Parameter(Mandatory)] [ValidateSet('account', 'folder-access', 'temp-folder', 'seclogon', 'station-grant', 'batch-right', 'task', 'profile')] [string] $Kind,
         [Parameter(Mandatory)] [hashtable] $Data,
         [switch] $PassThru
     )
@@ -929,6 +975,17 @@ function Remove-SUFolderAccess {
     if ($PSCmdlet.ShouldProcess($Path, "Remove every entry for $Sid")) {
         $acl.PurgeAccessRules($identity)
         [System.IO.FileSystemAclExtensions]::SetAccessControl($folder, $acl)
+    }
+}
+
+function Remove-SUTempFolder {
+    # The folder New-SUTempFolder made, with whatever the child left in it. Only a folder of
+    # the run's own pattern, under another folder, is removed.
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory)] [ValidatePattern('[\\/]su-temp-ci[0-9a-f]{12}$')] [string] $Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    if ($PSCmdlet.ShouldProcess($Path, 'Remove the temporary folder')) {
+        Remove-Item -LiteralPath $Path -Recurse -Force
     }
 }
 
@@ -1298,10 +1355,10 @@ Export-ModuleMember -Function @(
     'Test-TaskRunning', 'ConvertFrom-TaskResult', 'Invoke-BatchRun',
     'New-StandardUserName', 'New-StandardUserPassword', 'Find-SULocalUser', 'Get-RunnerGroupsText',
     'Get-ChildArgumentList', 'Get-ChildCommandLine', 'New-WrapperText',
-    'Grant-SUFolderAccess', 'Grant-SUStationAccess', 'Grant-SUBatchRight',
+    'Grant-SUFolderAccess', 'New-SUTempFolder', 'Grant-SUStationAccess', 'Grant-SUBatchRight',
     'Invoke-StandardUserRun',
     'Add-StandardUserItem', 'Invoke-StandardUserCleanup',
-    'Remove-SUAccount', 'Remove-SUFolderAccess', 'Stop-SUSecondaryLogon', 'Remove-SUStationGrant',
+    'Remove-SUAccount', 'Remove-SUFolderAccess', 'Remove-SUTempFolder', 'Stop-SUSecondaryLogon', 'Remove-SUStationGrant',
     'Remove-SUBatchRight', 'Remove-SUScheduledTask', 'Remove-SUProfile',
     'Measure-SUAceForSid', 'Get-SUStationEntry', 'Get-SUAccountRight',
     'Initialize-StandardUserNative'

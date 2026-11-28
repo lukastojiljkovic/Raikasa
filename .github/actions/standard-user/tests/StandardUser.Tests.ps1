@@ -752,6 +752,7 @@ Describe 'Invoke-StandardUserRun: the whole step, with every side effect mocked'
         Mock New-LocalUser -ModuleName StandardUser { $script:CreatedName = $Name; [pscustomobject]@{ Name = $Name; SID = [System.Security.Principal.SecurityIdentifier]::new('S-1-5-21-1-2-3-1001') } }
         Mock Add-LocalGroupMember -ModuleName StandardUser { }
         Mock Grant-SUFolderAccess -ModuleName StandardUser { }
+        Mock New-SUTempFolder -ModuleName StandardUser { $Path }
         Mock Get-Service -ModuleName StandardUser { [pscustomobject]@{ Status = 'Running'; StartType = 'Manual' } }
         Mock Start-Service -ModuleName StandardUser { }
         Mock Grant-SUStationAccess -ModuleName StandardUser { 'WinSta0\Default' }
@@ -947,25 +948,26 @@ Describe 'Invoke-StandardUserRun: the whole step, with every side effect mocked'
 
     It 'records every item of a desktop run, in order of creation' {
         $null = Invoke-TestRun
-        $script:CleanupKinds | Should -Be @('account', 'folder-access', 'folder-access', 'station-grant', 'profile')
+        $script:CleanupKinds | Should -Be @('account', 'folder-access', 'folder-access', 'temp-folder', 'station-grant', 'profile')
         Should -Invoke Start-Service -ModuleName StandardUser -Times 0 -Exactly
     }
 
     It 'records seclogon when the run starts it' {
         Mock Get-Service -ModuleName StandardUser { [pscustomobject]@{ Status = 'Stopped'; StartType = 'Manual' } }
         $null = Invoke-TestRun
-        $script:CleanupKinds | Should -Be @('account', 'folder-access', 'folder-access', 'seclogon', 'station-grant', 'profile')
+        $script:CleanupKinds | Should -Be @('account', 'folder-access', 'folder-access', 'temp-folder', 'seclogon', 'station-grant', 'profile')
         Should -Invoke Start-Service -ModuleName StandardUser -Times 1 -Exactly
     }
 
     It 'records every item of a batch run, in order of creation' {
         $script:Child.Groups = 'standard-batch.csv'
         $null = Invoke-TestRun -Token batch
-        $script:CleanupKinds | Should -Be @('account', 'folder-access', 'folder-access', 'batch-right', 'task', 'profile')
+        $script:CleanupKinds | Should -Be @('account', 'folder-access', 'folder-access', 'temp-folder', 'batch-right', 'task', 'profile')
     }
 
     It 'records an item before creating it: <Fails> throws, and its item is already recorded' -TestCases @(
         @{ Fails = 'Grant-SUFolderAccess'; Token = 'desktop'; Last = 'folder-access' }
+        @{ Fails = 'New-SUTempFolder'; Token = 'desktop'; Last = 'temp-folder' }
         @{ Fails = 'Grant-SUStationAccess'; Token = 'desktop'; Last = 'station-grant' }
         @{ Fails = 'Grant-SUBatchRight'; Token = 'batch'; Last = 'batch-right' }
         @{ Fails = 'Invoke-BatchRun'; Token = 'batch'; Last = 'profile' }
@@ -1020,6 +1022,35 @@ Describe 'Invoke-StandardUserRun: the whole step, with every side effect mocked'
         @($errors).Count | Should -Be 0
         Get-Content -LiteralPath (Join-Path $out 'wrapper.ps1') -Raw | Should -Match ([regex]::Escape((Join-Path $script:Workspace 'probe.ps1')))
     }
+
+    It 'gives the child a temporary folder of its own under the runner temp, for the account, and not the runner''s TEMP (<Token> token)' -TestCases @(
+        @{ Token = 'desktop'; Groups = 'standard-desktop.csv' }
+        @{ Token = 'batch'; Groups = 'standard-batch.csv' }
+    ) {
+        # The standard user inherits the runner account's TEMP and TMP, which are under a
+        # profile it cannot enter; every test that made a temporary file failed with
+        # UnauthorizedAccessException ('Access to the path C:\Users\RUNNER~1\AppData is denied').
+        $script:Child.Groups = $Groups
+        $null = Invoke-TestRun -Token $Token
+        $expectedUnder = $script:Temp
+        $accountSid = $script:Sid
+        Should -Invoke New-SUTempFolder -ModuleName StandardUser -Times 1 -Exactly -ParameterFilter {
+            $Path -match ('^' + [regex]::Escape($expectedUnder) + '\\su-temp-ci[0-9a-f]{12}$') -and $Sid -eq $accountSid
+        }
+        $out = Get-TestOutDir
+        $wrapper = Get-Content -LiteralPath (Join-Path $out 'wrapper.ps1') -Raw
+        $created = $script:CreatedName
+        $folder = [regex]::Escape((Join-Path $script:Temp "su-temp-$created"))
+        $wrapper | Should -Match ('(?m)^\$env:TEMP = ''' + $folder + '''\r?$')
+        $wrapper | Should -Match ('(?m)^\$env:TMP = ''' + $folder + '''\r?$')
+        $folder | Should -Not -Be ([regex]::Escape($out)) -Because 'the output folder stays for later steps; the temporary folder is removed'
+    }
+
+    It 'records the temporary folder for cleanup before it is made, after the account' {
+        $null = Invoke-TestRun
+        $script:CleanupKinds | Should -Contain 'temp-folder'
+        [array]::IndexOf($script:CleanupKinds, 'temp-folder') | Should -BeGreaterThan ([array]::IndexOf($script:CleanupKinds, 'account'))
+    }
 }
 
 Describe 'Invoke-StandardUserCleanup: reverse order, idempotent, never stops early' {
@@ -1027,12 +1058,15 @@ Describe 'Invoke-StandardUserCleanup: reverse order, idempotent, never stops ear
         $script:Calls = [System.Collections.Generic.List[string]]::new()
         Mock Remove-SUAccount -ModuleName StandardUser { $script:Calls.Add('account') }
         Mock Remove-SUFolderAccess -ModuleName StandardUser { $script:Calls.Add("folder-access:$Path") }
+        Mock Remove-SUTempFolder -ModuleName StandardUser { $script:Calls.Add('temp-folder') }
         Mock Stop-SUSecondaryLogon -ModuleName StandardUser { $script:Calls.Add('seclogon') }
         Mock Remove-SUStationGrant -ModuleName StandardUser { $script:Calls.Add('station-grant') }
         Mock Remove-SUBatchRight -ModuleName StandardUser { $script:Calls.Add('batch-right') }
         Mock Remove-SUScheduledTask -ModuleName StandardUser { $script:Calls.Add('task') }
         Mock Remove-SUProfile -ModuleName StandardUser { $script:Calls.Add('profile') }
         $script:State = [System.Collections.Generic.List[object]]::new()
+        # The mocks keep the real functions' parameter validation, so the path has the run's shape.
+        $script:TempPath = 'D:\a\_temp\su-temp-ci000000000000'
         $sid = 'S-1-5-21-1-2-3-1001'
         Add-StandardUserItem -State $script:State -Kind account -Data @{ Name = 'ci000000000000'; Sid = $sid }
         Add-StandardUserItem -State $script:State -Kind folder-access -Data @{ Path = 'out'; Sid = $sid }
@@ -1040,21 +1074,35 @@ Describe 'Invoke-StandardUserCleanup: reverse order, idempotent, never stops ear
     }
 
     It 'undoes a desktop run in reverse order of creation' {
+        Add-StandardUserItem -State $script:State -Kind temp-folder -Data @{ Path = $script:TempPath }
         Add-StandardUserItem -State $script:State -Kind seclogon -Data @{}
         Add-StandardUserItem -State $script:State -Kind station-grant -Data @{ SidBytes = [byte[]](1, 2) }
         Add-StandardUserItem -State $script:State -Kind profile -Data @{ Sid = 'S-1-5-21-1-2-3-1001' }
         $failures = @(Invoke-StandardUserCleanup -State $script:State)
         $failures.Count | Should -Be 0
-        @($script:Calls) | Should -Be @('profile', 'station-grant', 'seclogon', 'folder-access:workspace', 'folder-access:out', 'account')
+        @($script:Calls) | Should -Be @('profile', 'station-grant', 'seclogon', 'temp-folder', 'folder-access:workspace', 'folder-access:out', 'account')
         $script:State.Count | Should -Be 0
     }
 
     It 'undoes a batch run in reverse order of creation' {
+        Add-StandardUserItem -State $script:State -Kind temp-folder -Data @{ Path = $script:TempPath }
         Add-StandardUserItem -State $script:State -Kind batch-right -Data @{ SidBytes = [byte[]](1, 2) }
         Add-StandardUserItem -State $script:State -Kind task -Data @{ TaskName = 'ci-standard-user-ci000000000000' }
         Add-StandardUserItem -State $script:State -Kind profile -Data @{ Sid = 'S-1-5-21-1-2-3-1001' }
         $null = Invoke-StandardUserCleanup -State $script:State
-        @($script:Calls) | Should -Be @('profile', 'task', 'batch-right', 'folder-access:workspace', 'folder-access:out', 'account')
+        @($script:Calls) | Should -Be @('profile', 'task', 'batch-right', 'temp-folder', 'folder-access:workspace', 'folder-access:out', 'account')
+    }
+
+    It 'keeps going when the temporary folder cannot be removed, reports it, and keeps only that step for a retry' {
+        Add-StandardUserItem -State $script:State -Kind temp-folder -Data @{ Path = $script:TempPath }
+        Mock Remove-SUTempFolder -ModuleName StandardUser { $script:Calls.Add('temp-folder'); throw 'the child still holds a file open' }
+        $failures = @(Invoke-StandardUserCleanup -State $script:State)
+        @($script:Calls) | Should -Be @('temp-folder', 'folder-access:workspace', 'folder-access:out', 'account')
+        $failures.Count | Should -Be 1
+        $failures[0] | Should -Match 'temp-folder'
+        $script:State.Count | Should -Be 1
+        $script:State[0].Kind | Should -Be 'temp-folder'
+        $script:State[0].Data.Path | Should -Be $script:TempPath
     }
 
     It 'keeps going when one step throws, reports it, and keeps only that step for a retry' {
@@ -1228,6 +1276,103 @@ Describe 'Grant-SUFolderAccess and Remove-SUFolderAccess: the account''s two fol
     }
 }
 
+Describe 'New-SUTempFolder and Remove-SUTempFolder: the child''s own TEMP and TMP' {
+    BeforeAll {
+        $script:AccountSid = 'S-1-5-21-1-2-3-999995'
+        function Get-TempEntry([string] $Path) {
+            $item = Get-Item -LiteralPath $Path -Force
+            [System.IO.FileSystemAclExtensions]::GetAccessControl($item, [System.Security.AccessControl.AccessControlSections]::Access)
+        }
+    }
+
+    BeforeEach {
+        $script:Dir = Join-Path $TestDrive ('tmp' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+        $script:Folder = Join-Path $script:Dir 'su-temp-ci0123456789ab'
+        $null = New-Item -ItemType Directory -Path $script:Dir -Force
+    }
+
+    It 'makes the folder and returns its path' {
+        New-SUTempFolder -Path $script:Folder -Sid $script:AccountSid | Should -Be $script:Folder
+        Test-Path -LiteralPath $script:Folder -PathType Container | Should -BeTrue
+    }
+
+    It 'makes nothing under -WhatIf' {
+        New-SUTempFolder -Path $script:Folder -Sid $script:AccountSid -WhatIf | Should -BeNullOrEmpty
+        Test-Path -LiteralPath $script:Folder | Should -BeFalse
+    }
+
+    It 'protects the folder from inheritance and lets in the account, the running identity and SYSTEM only' {
+        $null = New-SUTempFolder -Path $script:Folder -Sid $script:AccountSid
+        $acl = Get-TempEntry $script:Folder
+        $acl.AreAccessRulesProtected | Should -BeTrue
+        $rules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+        $self = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $want = @($script:AccountSid, $self, 'S-1-5-18') | Sort-Object -Unique
+        @($rules | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique) | Should -Be $want
+        @($rules | Where-Object { $_.IsInherited }).Count | Should -Be 0
+        @($rules | Where-Object { $_.AccessControlType -ne 'Allow' }).Count | Should -Be 0
+        foreach ($rule in $rules) {
+            $rule.InheritanceFlags | Should -Be ([System.Security.AccessControl.InheritanceFlags] 'ContainerInherit, ObjectInherit')
+        }
+        foreach ($everyone in 'S-1-1-0', 'S-1-5-11', 'S-1-5-32-545') {
+            @($rules | Where-Object { $_.IdentityReference.Value -eq $everyone }).Count | Should -Be 0 -Because "$everyone must not get in"
+        }
+    }
+
+    It 'gives the account Modify, not more, and the running identity and SYSTEM full control' {
+        $null = New-SUTempFolder -Path $script:Folder -Sid $script:AccountSid
+        $rules = @((Get-TempEntry $script:Folder).GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+        $modify = [System.Security.AccessControl.FileSystemRights]::Modify
+        $account = @($rules | Where-Object { $_.IdentityReference.Value -eq $script:AccountSid })
+        $account.Count | Should -Be 1
+        # Windows reports Synchronize on top of what was granted.
+        ([int] $account[0].FileSystemRights -band (-bnot [int] [System.Security.AccessControl.FileSystemRights]::Synchronize)) | Should -Be ([int] $modify)
+        $system = @($rules | Where-Object { $_.IdentityReference.Value -eq 'S-1-5-18' })
+        $system.Count | Should -Be 1
+        $system[0].FileSystemRights | Should -Be ([System.Security.AccessControl.FileSystemRights]::FullControl)
+        $self = @($rules | Where-Object { $_.IdentityReference.Value -eq [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value })
+        $self.Count | Should -Be 1
+        $self[0].FileSystemRights | Should -Be ([System.Security.AccessControl.FileSystemRights]::FullControl)
+    }
+
+    It 'reaches what is made below it, so the running identity can remove a child''s files' {
+        $null = New-SUTempFolder -Path $script:Folder -Sid $script:AccountSid
+        $sub = New-Item -ItemType Directory -Path (Join-Path $script:Folder 'sub')
+        $file = Join-Path $sub.FullName 'child.txt'
+        Set-Content -LiteralPath $file -Value 'x'
+        @((Get-TempEntry $file).GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) |
+                Where-Object { $_.IsInherited -and $_.IdentityReference.Value -eq $script:AccountSid }).Count | Should -Be 1
+        Remove-SUTempFolder -Path $script:Folder
+        Test-Path -LiteralPath $script:Folder | Should -BeFalse
+    }
+
+    It 'rejects a value that is not a SID' {
+        { New-SUTempFolder -Path $script:Folder -Sid "x' OR SID LIKE '%" } | Should -Throw -ErrorId 'ParameterArgumentValidationError*'
+        Test-Path -LiteralPath $script:Folder | Should -BeFalse
+    }
+
+    It 'Remove-SUTempFolder leaves a missing folder alone, and a retry after a removal is a no-op' {
+        { Remove-SUTempFolder -Path $script:Folder } | Should -Not -Throw
+        $null = New-Item -ItemType Directory -Path $script:Folder
+        Set-Content -LiteralPath (Join-Path $script:Folder 'left.txt') -Value 'x'
+        Remove-SUTempFolder -Path $script:Folder
+        Test-Path -LiteralPath $script:Folder | Should -BeFalse
+        { Remove-SUTempFolder -Path $script:Folder } | Should -Not -Throw
+    }
+
+    It 'Remove-SUTempFolder never touches a folder outside the run''s pattern: <Path>' -TestCases @(
+        @{ Path = 'C:\Windows' }
+        @{ Path = 'C:\Users\runneradmin\AppData\Local\Temp' }
+        @{ Path = 'D:\a\_temp\standard-user-ci0123456789ab' }
+        @{ Path = 'D:\a\_temp\su-temp-ci0123456789' }
+        @{ Path = 'D:\a\_temp\su-temp-ci0123456789abc' }
+        @{ Path = 'D:\a\_temp\su-temp-ci0123456789xy' }
+        @{ Path = 'su-temp-ci0123456789ab' }
+    ) {
+        { Remove-SUTempFolder -Path $Path } | Should -Throw -ErrorId 'ParameterArgumentValidationError*'
+    }
+}
+
 Describe 'Secret handling' {
     It 'New-StandardUserPassword returns a SecureString of 32 characters with all four classes' {
         $secure = New-StandardUserPassword
@@ -1297,7 +1442,8 @@ Describe 'New-StandardUserName' {
 
 Describe 'New-WrapperText' {
     BeforeAll {
-        $script:Wrapper = New-WrapperText -Out "D:\a\_temp\it's" -GroupsFile 'D:\a\_temp\g.csv' -UserFile 'D:\a\_temp\u.csv' -Log 'D:\a\_temp\o.log' -ScriptPath 'D:\a\r\probe.ps1' -Workspace 'D:\a\r'
+        $script:Wrapper = New-WrapperText -Out "D:\a\_temp\it's" -GroupsFile 'D:\a\_temp\g.csv' -UserFile 'D:\a\_temp\u.csv' -Log 'D:\a\_temp\o.log' -ScriptPath 'D:\a\r\probe.ps1' -Workspace 'D:\a\r' -Temp 'D:\a\_temp\su-temp-ci0123456789ab'
+        $script:WrapperQuoted = New-WrapperText -Out 'D:\o' -GroupsFile 'D:\o\g.csv' -UserFile 'D:\o\u.csv' -Log 'D:\o\o.log' -ScriptPath 'D:\r\p.ps1' -Workspace 'D:\r' -Temp "D:\a\_temp\it's\su-temp-ci0123456789ab"
     }
 
     It 'is valid PowerShell even with a quote in a path' {
@@ -1320,17 +1466,37 @@ Describe 'New-WrapperText' {
         $script:Wrapper | Should -Match ('(?m)^' + [regex]::Escape('$env:STANDARD_USER_OUT = ''D:\a\_temp\it''''s''') + '\r?$')
         $script:Wrapper | Should -Match ('(?m)^' + [regex]::Escape('$env:GITHUB_WORKSPACE = ''D:\a\r''') + '\r?$')
     }
+
+    It 'sets TEMP and TMP to the folder it is given, by those exact names, and before it runs the script' {
+        # The child would otherwise inherit the runner account's TEMP and TMP, under a profile
+        # that a standard user cannot enter. Anchored on the whole assignment, so TEMP_X fails.
+        $script:Wrapper | Should -Match ('(?m)^' + [regex]::Escape('$env:TEMP = ''D:\a\_temp\su-temp-ci0123456789ab''') + '\r?$')
+        $script:Wrapper | Should -Match ('(?m)^' + [regex]::Escape('$env:TMP = ''D:\a\_temp\su-temp-ci0123456789ab''') + '\r?$')
+        $script:Wrapper.IndexOf('$env:TMP = ') | Should -BeGreaterThan -1
+        $script:Wrapper.IndexOf('$env:TMP = ') | Should -BeLessThan $script:Wrapper.IndexOf('D:\a\r\probe.ps1')
+        $script:Wrapper.IndexOf('$env:TEMP = ') | Should -BeLessThan $script:Wrapper.IndexOf('D:\a\r\probe.ps1')
+    }
+
+    It 'doubles a quote in the temporary folder''s path, and stays valid PowerShell' {
+        $errors = $null
+        $null = [System.Management.Automation.Language.Parser]::ParseInput($script:WrapperQuoted, [ref] $null, [ref] $errors)
+        @($errors).Count | Should -Be 0
+        $script:WrapperQuoted | Should -Match ('(?m)^' + [regex]::Escape('$env:TEMP = ''D:\a\_temp\it''''s\su-temp-ci0123456789ab''') + '\r?$')
+        $script:WrapperQuoted | Should -Match ('(?m)^' + [regex]::Escape('$env:TMP = ''D:\a\_temp\it''''s\su-temp-ci0123456789ab''') + '\r?$')
+    }
 }
 
 Describe 'The wrapper, run in a child pwsh as this user' {
     BeforeAll {
         $script:Script = Join-Path $TestDrive 'under-test.ps1'
         $script:Marker = Join-Path $TestDrive 'script-ran.txt'
-        # The script records the two variables the wrapper sets for it.
-        Set-Content -LiteralPath $script:Script -Value "Set-Content -LiteralPath '$($script:Marker)' -Value `"`$env:GITHUB_WORKSPACE|`$env:STANDARD_USER_OUT`"`n'hello from the script'`nexit 7"
+        # The script records the variables the wrapper sets for it, and where .NET puts a
+        # temporary file once TEMP and TMP are set.
+        $script:ChildTemp = Join-Path $TestDrive 'su-temp-ci0123456789ab'
+        Set-Content -LiteralPath $script:Script -Value "Set-Content -LiteralPath '$($script:Marker)' -Value `"`$env:GITHUB_WORKSPACE|`$env:STANDARD_USER_OUT|`$env:TEMP|`$env:TMP|`$([System.IO.Path]::GetTempPath())`"`n'hello from the script'`nexit 7"
         function Invoke-Wrapper([string] $Out) {
             $wrapper = Join-Path $TestDrive ('wrapper-' + [guid]::NewGuid().ToString('N') + '.ps1')
-            New-WrapperText -Out $Out -GroupsFile (Join-Path $Out 'groups.csv') -UserFile (Join-Path $Out 'user.csv') -Log (Join-Path $Out 'output.log') -ScriptPath $script:Script -Workspace $TestDrive |
+            New-WrapperText -Out $Out -GroupsFile (Join-Path $Out 'groups.csv') -UserFile (Join-Path $Out 'user.csv') -Log (Join-Path $Out 'output.log') -ScriptPath $script:Script -Workspace $TestDrive -Temp $script:ChildTemp |
                 Set-Content -LiteralPath $wrapper -Encoding utf8
             & $script:Pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $wrapper 2>$null | Out-Null
             $LASTEXITCODE
@@ -1344,7 +1510,14 @@ Describe 'The wrapper, run in a child pwsh as this user' {
     It 'records the token, runs the script with its output in the log, and exits with its code' {
         $out = (New-Item -ItemType Directory -Path (Join-Path $TestDrive 'wrap-ok') -Force).FullName
         Invoke-Wrapper $out | Should -Be 7
-        (Get-Content -LiteralPath $script:Marker -Raw).Trim() | Should -Be "$TestDrive|$out" -Because 'the script sees the workspace and the output folder the wrapper set'
+        $seen = (Get-Content -LiteralPath $script:Marker -Raw).Trim().Split('|')
+        $seen.Count | Should -Be 5
+        $seen[0] | Should -Be $TestDrive -Because 'the script sees the workspace the wrapper set'
+        $seen[1] | Should -Be $out -Because 'the script sees the output folder the wrapper set'
+        $seen[2] | Should -Be $script:ChildTemp -Because 'TEMP is the folder the wrapper was given, not the one this process has'
+        $seen[3] | Should -Be $script:ChildTemp -Because 'TMP is the folder the wrapper was given, not the one this process has'
+        $seen[4].TrimEnd('\') | Should -Be $script:ChildTemp -Because 'a temporary file made by .NET lands in the folder the wrapper was given'
+        $script:ChildTemp | Should -Not -Be $env:TEMP -Because 'the check is only worth something when the host''s own TEMP is another folder'
         (ConvertFrom-WhoamiGroupsCsv -Text (Get-Content -LiteralPath (Join-Path $out 'groups.csv') -Raw)).Ok | Should -BeTrue
         (ConvertFrom-WhoamiUserCsv -Text (Get-Content -LiteralPath (Join-Path $out 'user.csv') -Raw)).Sid | Should -Be ([System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value)
         Get-Content -LiteralPath (Join-Path $out 'output.log') -Raw | Should -Match 'hello from the script'
@@ -1478,7 +1651,7 @@ Describe 'Every command call binds to the command''s parameters' {
     }
 
     It 'every command call in the generated wrapper binds' {
-        $text = New-WrapperText -Out 'D:\o' -GroupsFile 'D:\o\g.csv' -UserFile 'D:\o\u.csv' -Log 'D:\o\o.log' -ScriptPath 'D:\r\p.ps1' -Workspace 'D:\r'
+        $text = New-WrapperText -Out 'D:\o' -GroupsFile 'D:\o\g.csv' -UserFile 'D:\o\u.csv' -Log 'D:\o\o.log' -ScriptPath 'D:\r\p.ps1' -Workspace 'D:\r' -Temp 'D:\t\su-temp-ci0123456789ab'
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref] $null, [ref] $null)
         Get-CommandCallProblem -Ast $ast -Label 'wrapper' | Should -BeNullOrEmpty
     }

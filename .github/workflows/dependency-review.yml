@@ -50,10 +50,11 @@ jobs:
         with:
           egress-policy: block
           disable-telemetry: true
-          # checkout; the dependency graph comparison; the OpenSSF Scorecard lookup
+          # checkout; the dependency graph comparison; the deps.dev and OpenSSF Scorecard lookups
           allowed-endpoints: >
             github.com:443
             api.github.com:443
+            api.deps.dev:443
             api.securityscorecards.dev:443
       # The checkout supplies the generated config file the action reads.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
