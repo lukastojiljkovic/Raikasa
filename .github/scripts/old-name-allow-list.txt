@@ -28,3 +28,6 @@ CHANGELOG.md: [1.2.1]: https://github.com/lukastojiljkovic/Refreshify/compare/v1
 CHANGELOG.md: [1.2.0]: https://github.com/lukastojiljkovic/Refreshify/compare/v1.1.0...v1.2.0
 CHANGELOG.md: [1.1.0]: https://github.com/lukastojiljkovic/Refreshify/compare/v1.0.0...v1.1.0
 CHANGELOG.md: [1.0.0]: https://github.com/lukastojiljkovic/Refreshify/releases/tag/v1.0.0
+
+# The program's spelling vocabulary, so that Vale accepts the name in the CHANGELOG entries above.
+.vale/styles/config/vocabularies/Program/accept.txt: Refreshify

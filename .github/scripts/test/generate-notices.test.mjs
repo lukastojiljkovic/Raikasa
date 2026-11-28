@@ -2097,7 +2097,7 @@ test("an expression that repeats a licence lists the package once under its text
 });
 
 // ---- fix round 3: the runs with one report, line ends, folders and the crates form ------------------------
-// Most repositories run one report: a Rust app gives cargo-about's, Refreshify 2.0.1 gives nuget-license's, and only
+// Most repositories run one report: a Rust app gives cargo-about's, Raikasa 2.0.1 gives nuget-license's, and only
 // PerfWindow gives both. Every content test above gives both, so these cases give one and compare the whole file.
 
 const RUST_ONLY = ["--cargo-about", "cargo-about.json", "--inventory", "inventory/bundled-components.json", "--policy", "policy.json"];
